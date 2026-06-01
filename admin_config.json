@@ -1,0 +1,42 @@
+{
+  "scraping": {
+    "search_queries": [
+      "\"marketing agency\" OR \"digital agency\" OR \"media agency\"",
+      "\"looking for an agency\" OR \"need a marketing agency\"",
+      "\"recommend a marketing agency\" OR \"suggest a digital agency\"",
+      "\"hiring marketing agency\" OR \"onboarding agency\"",
+      "\"D2C marketing\" OR \"performance marketing agency\"",
+      "\"brand agency\" OR \"growth agency\" India"
+    ],
+    "max_posts_per_query": 10,
+    "total_post_cap": 50,
+    "posted_limit": "24h",
+    "sort_by": "date",
+    "author_industry_ids": [
+      "Marketing and Advertising",
+      "Health, Wellness and Fitness",
+      "Apparel and Fashion",
+      "Real Estate",
+      "Retail"
+    ],
+    "author_geo_ids": [],
+    "min_post_length": 50
+  },
+  "filtering": {
+    "gpt_filter_enabled": true,
+    "excluded_keywords": [],
+    "only_posts_with_email": false,
+    "language": "any"
+  },
+  "enrichment": {
+    "apollo_enabled": true,
+    "max_enrichment_per_run": 100
+  },
+  "sending": {
+    "daily_email_cap": 100,
+    "email_send_delay_seconds": 2,
+    "dry_run_mode": true,
+    "excluded_domains": [],
+    "reply_to_email": ""
+  }
+}
