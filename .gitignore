@@ -1,0 +1,51 @@
+# ─── Secrets & Credentials ───────────────────────────────────────────────────
+.env
+backend/service_account.json
+
+# ─── Runtime / Generated ─────────────────────────────────────────────────────
+*.log
+pipeline_checkpoint.json
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# ─── Node / Frontend ─────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.production
+.npm
+
+# ─── macOS ───────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# ─── IDE / Editor ────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude/
+
+# ─── Internal Docs ───────────────────────────────────────────────────────────
+MASTER_PROMPT_DecisionPinnacle_Pipeline.md
