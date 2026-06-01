@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sse-starlette
+apify-client
+openai
+google-generativeai
+gspread
+google-auth
+google-auth-oauthlib
+requests
+python-dotenv
+python-telegram-bot>=20.0
