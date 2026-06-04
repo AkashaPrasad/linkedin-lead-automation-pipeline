@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Dashboard from './components/Dashboard'
 import TemplateEditor from './components/TemplateEditor'
 import AdminPanel from './components/AdminPanel'
+import HistoryPage from './components/HistoryPage'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: '⚡' },
   { id: 'templates', label: 'Templates', icon: '✉' },
   { id: 'admin', label: 'Admin Panel', icon: '⚙' },
+  { id: 'history', label: 'History', icon: '🕓' },
 ]
 
 function Clock() {
@@ -38,13 +40,17 @@ export default function App() {
   const [completionData, setCompletionData] = useState(null)
   const [sheetUrl, setSheetUrl] = useState('')
   const [isDryRun, setIsDryRun] = useState(false)
+  const [isAutomated, setIsAutomated] = useState(false)
   const [checkpoint, setCheckpoint] = useState(null)
   const esRef = useRef(null)
 
   const fetchDryRunStatus = useCallback(() => {
     fetch('/api/admin/config')
       .then(r => r.json())
-      .then(d => setIsDryRun(d?.sending?.dry_run_mode === true))
+      .then(d => {
+        setIsDryRun(d?.sending?.dry_run_mode === true)
+        setIsAutomated(d?.automation?.enabled === true)
+      })
       .catch(() => {})
   }, [])
 
@@ -249,6 +255,12 @@ export default function App() {
               <span className="font-semibold">DRY RUN ON</span>
             </div>
           )}
+          {isAutomated && (
+            <div className="flex items-center gap-1.5 text-xs text-green-accent">
+              <span>⚡</span>
+              <span className="font-semibold">AUTO SCHEDULE ON</span>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -258,7 +270,7 @@ export default function App() {
         <header className="flex items-center justify-between px-6 py-4 bg-bg-secondary border-b border-border-color flex-shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-semibold text-text-primary">
-              {activeNav === 'dashboard' ? 'Pipeline Dashboard' : activeNav === 'templates' ? 'Email Templates' : 'Admin Panel'}
+              {activeNav === 'dashboard' ? 'Pipeline Dashboard' : activeNav === 'templates' ? 'Email Templates' : activeNav === 'admin' ? 'Admin Panel' : 'Run History'}
             </h2>
           </div>
           <div className="flex items-center gap-3">
@@ -309,10 +321,12 @@ export default function App() {
                 setCheckpoint(null)
               }}
               onDismissComplete={() => setCompletionData(null)}
+              onViewHistory={() => setActiveNav('history')}
             />
           )}
           {activeNav === 'templates' && <TemplateEditor />}
           {activeNav === 'admin' && <AdminPanel />}
+          {activeNav === 'history' && <HistoryPage />}
         </main>
       </div>
     </div>

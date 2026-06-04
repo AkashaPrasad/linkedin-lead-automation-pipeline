@@ -3,8 +3,9 @@ import StageProgress from './StageProgress'
 import LeadTable from './LeadTable'
 import LogConsole from './LogConsole'
 import PipelineRunner from './PipelineRunner'
+import BrevoStatsPanel from './BrevoStatsPanel'
 
-function CompletionModal({ data, sheetUrl, onDismiss }) {
+function CompletionModal({ data, sheetUrl, onDismiss, onViewHistory }) {
   if (!data) return null
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -48,8 +49,14 @@ function CompletionModal({ data, sheetUrl, onDismiss }) {
             </a>
           )}
           <button
+            onClick={() => { onDismiss(); onViewHistory && onViewHistory() }}
+            className="flex-1 px-4 py-2.5 bg-purple-primary/10 border border-purple-primary/30 text-purple-light rounded-lg text-sm font-medium hover:bg-purple-primary/20 transition-colors"
+          >
+            View History
+          </button>
+          <button
             onClick={onDismiss}
-            className="flex-1 px-4 py-2.5 bg-bg-tertiary border border-border-color text-text-secondary rounded-lg text-sm font-medium hover:text-text-primary hover:bg-bg-tertiary/80 transition-colors"
+            className="px-4 py-2.5 bg-bg-tertiary border border-border-color text-text-secondary rounded-lg text-sm font-medium hover:text-text-primary hover:bg-bg-tertiary/80 transition-colors"
           >
             Close
           </button>
@@ -102,7 +109,13 @@ function CheckpointBanner({ checkpoint, onResume, onDismiss }) {
   )
 }
 
-export default function Dashboard({ isRunning, isDryRun, checkpoint, stages, stats, leads, logs, completionData, sheetUrl, onRun, onResume, onDismissCheckpoint, onDismissComplete }) {
+export default function Dashboard({
+  isRunning, isDryRun, checkpoint, stages, stats, leads, logs,
+  completionData, sheetUrl, onRun, onResume, onDismissCheckpoint,
+  onDismissComplete, onViewHistory,
+}) {
+  const showBrevoStats = !!completionData && !isRunning
+
   return (
     <div className="h-full flex flex-col overflow-hidden p-6 gap-4">
       {/* Checkpoint banner */}
@@ -144,28 +157,35 @@ export default function Dashboard({ isRunning, isDryRun, checkpoint, stages, sta
         <StatsBar stats={stats} />
       </div>
 
-      {/* Main grid — scrollable inner areas */}
-      <div className="flex-1 grid grid-cols-[280px_1fr_1fr] grid-rows-[1fr_180px] gap-4 min-h-0">
+      {/* Main grid */}
+      <div className={`flex-1 grid gap-4 min-h-0 ${showBrevoStats ? 'grid-cols-[280px_1fr] grid-rows-[1fr_180px]' : 'grid-cols-[280px_1fr_1fr] grid-rows-[1fr_180px]'}`}>
         {/* Stage progress — spans both rows */}
         <div className="row-span-2 overflow-auto">
           <StageProgress stages={stages} />
         </div>
 
-        {/* Lead table */}
-        <div className="overflow-hidden">
-          <LeadTable leads={leads} />
-        </div>
-
-        {/* Empty right panel placeholder for future metrics */}
-        <div className="bg-bg-secondary rounded-xl border border-border-color flex items-center justify-center overflow-hidden">
-          <div className="text-center text-text-muted">
-            <div className="text-3xl mb-2">📊</div>
-            <p className="text-xs">Analytics coming soon</p>
+        {showBrevoStats ? (
+          /* After completion: Brevo stats spanning the right side */
+          <div className="overflow-hidden">
+            <BrevoStatsPanel />
           </div>
-        </div>
+        ) : (
+          <>
+            {/* While running / idle: Lead table + placeholder */}
+            <div className="overflow-hidden">
+              <LeadTable leads={leads} />
+            </div>
+            <div className="bg-bg-secondary rounded-xl border border-border-color flex items-center justify-center overflow-hidden">
+              <div className="text-center text-text-muted">
+                <div className="text-3xl mb-2">📊</div>
+                <p className="text-xs">Stats appear after run</p>
+              </div>
+            </div>
+          </>
+        )}
 
-        {/* Log console — spans last 2 columns */}
-        <div className="col-span-2 overflow-hidden">
+        {/* Log console — always spans the right columns in row 2 */}
+        <div className={`${showBrevoStats ? 'col-span-1' : 'col-span-2'} overflow-hidden`}>
           <LogConsole logs={logs} />
         </div>
       </div>
@@ -175,6 +195,7 @@ export default function Dashboard({ isRunning, isDryRun, checkpoint, stages, sta
         data={completionData}
         sheetUrl={sheetUrl}
         onDismiss={onDismissComplete}
+        onViewHistory={onViewHistory}
       />
     </div>
   )

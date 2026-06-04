@@ -42,6 +42,12 @@ DEFAULT_CONFIG = {
         "excluded_domains": [],
         "reply_to_email": "",
     },
+    "automation": {
+        "enabled": False,
+        "days": ["monday", "wednesday", "friday"],
+        "times": ["09:00"],
+        "timezone": "Asia/Kolkata",
+    },
 }
 
 

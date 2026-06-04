@@ -1,10 +1,12 @@
 import asyncio
 import json
 import sys
+from datetime import date as dt_date
 from pathlib import Path
 from collections import deque
 from contextlib import asynccontextmanager
 
+import requests as req
 from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -15,6 +17,8 @@ from logger import get_logger
 from pipeline import run_pipeline_async, resume_pipeline_async
 import admin_config as admin_cfg
 import checkpoint as cp
+import run_history
+import scheduler as sched
 
 log = get_logger("main")
 
@@ -33,15 +37,55 @@ async def broadcast(event: dict):
             pass
 
 
-async def _pipeline_wrapper():
+async def _pipeline_run_core(wrapper_fn):
+    """Runs the pipeline, captures history, resets _is_running."""
     global _is_running
+    last_stats: dict = {}
+    complete_data: dict | None = None
+
+    async def _capturing_emit(event: dict):
+        nonlocal complete_data
+        await broadcast(event)
+        if event.get("event") == "stats":
+            last_stats.update(event)
+        elif event.get("event") == "complete":
+            complete_data = event
+
     try:
-        await run_pipeline_async(broadcast)
+        await wrapper_fn(_capturing_emit)
     finally:
         _is_running = False
+        if complete_data:
+            run_history.append_run({
+                "scraped": complete_data.get("scraped", 0),
+                "real": complete_data.get("real", 0),
+                "enriched": last_stats.get("enriched", 0),
+                "with_email": complete_data.get("with_email", 0),
+                "sent": complete_data.get("sent", 0),
+                "failed": complete_data.get("failed", 0),
+                "no_email": complete_data.get("no_email", 0),
+                "duration_min": complete_data.get("duration_min", 0),
+                "dry_run": complete_data.get("dry_run", False),
+                "date": dt_date.today().isoformat(),
+            })
 
 
-# ── Startup validation ────────────────────────────────────────────────────────
+async def _pipeline_wrapper():
+    await _pipeline_run_core(run_pipeline_async)
+
+
+async def _scheduled_pipeline_run():
+    global _is_running
+    if _is_running:
+        log.info("Scheduled run skipped — pipeline already running")
+        return
+    _is_running = True
+    _event_history.clear()
+    log.info("Scheduled pipeline run starting")
+    await _pipeline_run_core(run_pipeline_async)
+
+
+# ── Startup / shutdown ────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     missing = validate_config()
@@ -63,7 +107,15 @@ async def lifespan(app: FastAPI):
             log.info("✅ All checks passed — Decision Pinnacle Pipeline ready")
         except Exception as e:
             log.error(f"Google Sheets connection test failed: {e}")
+
+    # Start scheduler and apply saved automation config
+    sched.init(_scheduled_pipeline_run)
+    cfg = admin_cfg.load()
+    sched.update(cfg.get("automation", {}))
+
     yield
+
+    sched.shutdown()
 
 
 app = FastAPI(title="Decision Pinnacle Pipeline", lifespan=lifespan)
@@ -85,7 +137,6 @@ async def pipeline_stream(request: Request):
     async def generate():
         for event in list(_event_history):
             yield {"data": json.dumps(event)}
-
         try:
             while True:
                 if await request.is_disconnected():
@@ -110,13 +161,11 @@ async def run_pipeline(background_tasks: BackgroundTasks):
     global _is_running
     if _is_running:
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
-
     missing = validate_config()
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing env vars: {', '.join(missing)}")
     if not service_account_path().exists():
         raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
-
     _is_running = True
     _event_history.clear()
     background_tasks.add_task(_pipeline_wrapper)
@@ -143,22 +192,16 @@ async def resume_pipeline(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
     if not cp.exists():
         raise HTTPException(status_code=404, detail="No checkpoint found. Run the pipeline first.")
-
     missing = validate_config()
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing env vars: {', '.join(missing)}")
     if not service_account_path().exists():
         raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
-
     _is_running = True
     _event_history.clear()
 
     async def _resume_wrapper():
-        global _is_running
-        try:
-            await resume_pipeline_async(broadcast)
-        finally:
-            _is_running = False
+        await _pipeline_run_core(resume_pipeline_async)
 
     background_tasks.add_task(_resume_wrapper)
     return {"status": "resuming"}
@@ -168,6 +211,42 @@ async def resume_pipeline(background_tasks: BackgroundTasks):
 async def delete_checkpoint():
     cp.clear()
     return {"status": "cleared"}
+
+
+# ── History endpoints ─────────────────────────────────────────────────────────
+@app.get("/api/history")
+async def get_history():
+    return run_history.get_all()
+
+
+# ── Brevo stats endpoint ──────────────────────────────────────────────────────
+@app.get("/api/brevo/stats")
+async def get_brevo_stats(date: str = None):
+    from config import BREVO_API_KEY
+    if not BREVO_API_KEY:
+        raise HTTPException(status_code=400, detail="Brevo API key not configured")
+    target_date = date or dt_date.today().isoformat()
+    headers = {"api-key": BREVO_API_KEY, "Content-Type": "application/json"}
+    try:
+        r = await asyncio.to_thread(
+            lambda: req.get(
+                "https://api.brevo.com/v3/smtp/statistics/aggregatedReport",
+                params={"startDate": target_date, "endDate": target_date},
+                headers=headers,
+                timeout=10,
+            )
+        )
+        if r.ok:
+            return r.json()
+        return {"error": f"Brevo returned {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"error": str(e)[:200]}
+
+
+# ── Automation next-runs endpoint ─────────────────────────────────────────────
+@app.get("/api/automation/next-runs")
+async def get_next_runs():
+    return {"next_runs": sched.next_run_times()}
 
 
 # ── Templates endpoints ───────────────────────────────────────────────────────
@@ -216,10 +295,11 @@ async def get_admin_config():
 @app.post("/api/admin/config")
 async def save_admin_config(request: Request):
     body = await request.json()
-    # Merge with defaults to prevent missing keys
     from admin_config import _deep_merge, DEFAULT_CONFIG
     merged = _deep_merge(DEFAULT_CONFIG, body)
     admin_cfg.save(merged)
+    # Update scheduler with new automation config
+    sched.update(merged.get("automation", {}))
     log.info("Admin config saved")
     return {"status": "saved"}
 
@@ -270,7 +350,6 @@ async def send_test_email(request: Request):
 # ── Apollo plan check ────────────────────────────────────────────────────────
 @app.get("/api/apollo/plan-check")
 async def apollo_plan_check():
-    import requests as req
     from config import APOLLO_API_KEY
     if not APOLLO_API_KEY or APOLLO_API_KEY.startswith("your_"):
         return {"accessible": False, "reason": "No Apollo API key configured"}

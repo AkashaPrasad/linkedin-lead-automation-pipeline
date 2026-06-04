@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const TABS = ['Scraping', 'AI Filtering', 'Enrichment', 'Email Sending']
+const TABS = ['Scraping', 'AI Filtering', 'Enrichment', 'Email Sending', 'Automation']
 
 // ── Reusable UI pieces ────────────────────────────────────────────────────────
 
@@ -428,6 +428,196 @@ function SendingTab({ cfg, onChange }) {
   )
 }
 
+// ── Automation tab ────────────────────────────────────────────────────────────
+
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' }
+const TIMEZONES = ['Asia/Kolkata', 'UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Asia/Dubai']
+
+function TimeList({ times, onChange }) {
+  const [newTime, setNewTime] = useState('09:00')
+
+  const add = () => {
+    if (newTime && !times.includes(newTime)) {
+      onChange([...times, newTime].sort())
+    }
+  }
+
+  const remove = (t) => onChange(times.filter(x => x !== t))
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {times.map(t => (
+          <div key={t} className="flex items-center gap-1.5 bg-bg-primary border border-border-color rounded-lg px-3 py-1.5 group">
+            <span className="text-sm font-mono text-text-primary">{t}</span>
+            <button
+              onClick={() => remove(t)}
+              className="w-4 h-4 rounded flex items-center justify-center text-text-muted hover:text-red-accent transition-colors opacity-0 group-hover:opacity-100 text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {times.length === 0 && <p className="text-xs text-text-muted italic">No times set</p>}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="time"
+          value={newTime}
+          onChange={e => setNewTime(e.target.value)}
+          className="bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
+        />
+        <button
+          onClick={add}
+          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors"
+        >
+          + Add Time
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function AutomationTab({ cfg, onChange }) {
+  const a = cfg.automation || {}
+  const set = (key, val) => onChange({ ...cfg, automation: { ...a, [key]: val } })
+  const [nextRuns, setNextRuns] = useState([])
+
+  useEffect(() => {
+    fetch('/api/automation/next-runs')
+      .then(r => r.json())
+      .then(d => setNextRuns(d.next_runs || []))
+      .catch(() => {})
+  }, [a.enabled])
+
+  const toggleDay = (day) => {
+    const current = a.days || []
+    const next = current.includes(day) ? current.filter(d => d !== day) : [...current, day]
+    set('days', next)
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Mode toggle */}
+      <div className="space-y-4">
+        <SectionLabel>Pipeline Mode</SectionLabel>
+        <div className="p-4 bg-bg-primary border border-border-color rounded-xl">
+          <div className="flex gap-3">
+            <button
+              onClick={() => set('enabled', false)}
+              className={`flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
+                !a.enabled
+                  ? 'border-purple-primary bg-purple-primary/10 text-purple-light'
+                  : 'border-border-color text-text-muted hover:border-border-color/80 hover:text-text-secondary'
+              }`}
+            >
+              <span className="text-2xl">🖱</span>
+              <span className="text-sm font-semibold">Manual</span>
+              <span className="text-xs text-center opacity-70">Run only when you click the Run button</span>
+            </button>
+            <button
+              onClick={() => set('enabled', true)}
+              className={`flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
+                a.enabled
+                  ? 'border-purple-primary bg-purple-primary/10 text-purple-light'
+                  : 'border-border-color text-text-muted hover:border-border-color/80 hover:text-text-secondary'
+              }`}
+            >
+              <span className="text-2xl">⚡</span>
+              <span className="text-sm font-semibold">Automated</span>
+              <span className="text-xs text-center opacity-70">Runs on a schedule automatically</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Schedule settings — only shown when automated */}
+      {a.enabled && (
+        <>
+          <div className="space-y-4">
+            <SectionLabel>Run Days</SectionLabel>
+            <div className="flex gap-2 flex-wrap">
+              {DAYS.map(day => {
+                const active = (a.days || []).includes(day)
+                return (
+                  <button
+                    key={day}
+                    onClick={() => toggleDay(day)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      active
+                        ? 'bg-purple-primary text-white border-purple-primary'
+                        : 'bg-bg-primary border-border-color text-text-muted hover:text-text-primary hover:border-purple-primary/30'
+                    }`}
+                  >
+                    {DAY_SHORT[day]}
+                  </button>
+                )
+              })}
+            </div>
+            {(a.days || []).length === 0 && (
+              <p className="text-xs text-amber-accent">⚠ Select at least one day for scheduled runs</p>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <SectionLabel>Run Times</SectionLabel>
+            <Field
+              label="Schedule Times"
+              hint="The pipeline will run at each of these times on the selected days. All times are in the selected timezone."
+            >
+              <TimeList times={a.times || []} onChange={v => set('times', v)} />
+            </Field>
+          </div>
+
+          <div className="space-y-4">
+            <SectionLabel>Timezone</SectionLabel>
+            <Field label="Timezone" hint="All scheduled times are interpreted in this timezone">
+              <SelectInput
+                value={a.timezone || 'Asia/Kolkata'}
+                onChange={v => set('timezone', v)}
+                options={TIMEZONES.map(tz => ({ value: tz, label: tz }))}
+              />
+            </Field>
+          </div>
+
+          {/* Next runs preview */}
+          <div className="space-y-3">
+            <SectionLabel>Next Scheduled Runs</SectionLabel>
+            <div className="p-4 bg-bg-primary border border-border-color rounded-xl">
+              {nextRuns.length === 0 ? (
+                <p className="text-xs text-text-muted italic">Save your settings to see scheduled times</p>
+              ) : (
+                <div className="space-y-2">
+                  {nextRuns.slice(0, 5).map((t, i) => {
+                    const d = new Date(t)
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-xs text-text-secondary">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-accent flex-shrink-0" />
+                        {d.toLocaleString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {!a.enabled && (
+        <div className="p-4 bg-bg-primary border border-border-color rounded-xl">
+          <p className="text-xs text-text-secondary leading-relaxed">
+            In <strong className="text-text-primary">Manual mode</strong>, the pipeline only runs when you click the{' '}
+            <strong className="text-text-primary">Run Pipeline</strong> button on the Dashboard.
+            No automatic runs will occur.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('Scraping')
@@ -490,6 +680,7 @@ export default function AdminPanel() {
     'AI Filtering': <FilteringTab cfg={config} onChange={setConfig} />,
     'Enrichment': <EnrichmentTab cfg={config} onChange={setConfig} />,
     'Email Sending': <SendingTab cfg={config} onChange={setConfig} />,
+    'Automation': <AutomationTab cfg={config} onChange={setConfig} />,
   }
 
   return (
@@ -548,6 +739,9 @@ export default function AdminPanel() {
             {tab}
             {tab === 'Email Sending' && config?.sending?.dry_run_mode && (
               <span className="ml-1.5 text-amber-accent text-xs">DRY RUN</span>
+            )}
+            {tab === 'Automation' && config?.automation?.enabled && (
+              <span className="ml-1.5 text-green-accent text-xs">ON</span>
             )}
           </button>
         ))}
