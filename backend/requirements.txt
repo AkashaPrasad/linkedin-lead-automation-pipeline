@@ -10,3 +10,4 @@ google-auth-oauthlib
 requests
 python-dotenv
 python-telegram-bot>=20.0
+apscheduler

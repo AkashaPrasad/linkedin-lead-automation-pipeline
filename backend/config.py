@@ -53,4 +53,11 @@ def has_gemini() -> bool:
     return not _is_placeholder(GEMINI_API_KEY)
 
 def service_account_path() -> Path:
+    # On Railway/cloud, the JSON is injected as an env var to avoid committing secrets
+    sa_json = os.getenv("SERVICE_ACCOUNT_JSON", "")
+    if sa_json:
+        tmp = Path("/tmp/service_account.json")
+        if not tmp.exists():
+            tmp.write_text(sa_json)
+        return tmp
     return Path(__file__).parent / GOOGLE_SERVICE_ACCOUNT_FILE

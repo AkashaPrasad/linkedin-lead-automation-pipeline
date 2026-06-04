@@ -387,3 +387,10 @@ async def check_config():
         "ready": len(missing) == 0 and sa_exists,
         "sheet_url": f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}",
     }
+
+
+# ── Serve React frontend (production build) ───────────────────────────────────
+_frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+if _frontend_dist.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="static")
