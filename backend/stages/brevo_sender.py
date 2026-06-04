@@ -100,6 +100,7 @@ def _send_one_sync_with_reply(to_email: str, to_name: str, subject: str, body: s
     payload = {
         "sender": {"name": sender_name, "email": sender_email},
         "to": [{"name": to_name, "email": to_email}],
+        "cc": [{"name": "Deepti", "email": "deepti@decisionpinnacle.com"}],
         "subject": subject,
         "textContent": body,
     }
@@ -160,7 +161,7 @@ async def run_brevo_sender(
         from post_fields import get_content, get_author_name, get_author_headline
         name = get_author_name(post)
         headline = get_author_headline(post)
-        first_name = name.split()[0] if name.split() else "there"
+        first_name = name.split()[0].capitalize() if name.split() else "there"
         company = _extract_company(headline)
         post_snippet = get_content(post)[:100].replace("\n", " ")
         category = post.get("_category", "Generic")

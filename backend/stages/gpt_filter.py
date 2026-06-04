@@ -5,28 +5,51 @@ from config import has_openai, has_gemini, OPENAI_API_KEY, GEMINI_API_KEY
 
 log = get_logger("gpt_filter")
 
-SYSTEM_PROMPT = "You are a lead filter for a marketing consultancy. Return ONLY valid JSON. No markdown."
+SYSTEM_PROMPT = "You are a lead qualifier for a digital marketing agency. Return ONLY valid JSON. No markdown."
 
-USER_TEMPLATE = """Read this LinkedIn post. Decide: KEEP (true) or SKIP (false)?
+USER_TEMPLATE = """You are qualifying LinkedIn posts for Decision Pinnacle — a digital marketing agency offering paid ads (Meta/Google), social media management, branding, creative campaigns, and marketplace (Amazon/Flipkart/Myntra/Zepto) growth services.
 
-SKIP only if the post is clearly one of these exact cases:
-1. A FREELANCER promoting their own services to get hired: "I offer X services", "hire me", "DM for freelance work", "available for projects"
-2. A JOB SEEKER looking for employment: "looking for a job", "open to work", "seeking full-time role at an agency", "please refer me"
-3. An AGENCY or company PROMOTING THEIR OWN work: "our agency helped brand X", "we delivered Y campaign", agency sharing their case studies or wins
-4. Post is already CLOSED: "already found someone", "position filled", "no longer looking", "requirement closed", "update: hired"
-5. Completely OFF-TOPIC: zero connection to business, marketing, or professional services
+Your job: Decide whether this post represents a potential client — a business or founder who NEEDS or is OPEN TO hiring a digital marketing agency.
 
-KEEP everything else. When in doubt → KEEP.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ KEEP (is_real_lead: true) if the post shows ANY of these signals:
 
-Do NOT reject a post for:
-- Being vague or not mentioning a specific service
-- Not being from India
-- Not being a D2C brand
-- Appearing to be thought leadership (still keep — they can still be reached)
-- Not having "strong" or "explicit" intent
-- Mentioning marketing without clearly hiring anyone
+STRONG signals (definitely keep):
+• Explicitly asking for an agency or marketer: "looking for a digital marketing agency", "can anyone recommend a good agency"
+• Seeking recommendations: "which agency should I hire?", "has anyone worked with a good social media agency?"
+• Directly stating a marketing problem: "our ads aren't converting", "struggling with ROAS", "our social media has no engagement", "we tried ads but wasted money"
+• Planning to outsource or scale marketing: "thinking of hiring an agency", "exploring options for marketing", "want to outsource our social media"
+• Brand or product launch with a marketing need: "just launched our D2C brand", "launching on Amazon next month", "starting a new clothing line"
 
-If there is any chance this person could benefit from a marketing agency → KEEP it.
+MODERATE signals (keep if the author is a business owner, founder, or brand — NOT a marketer/agency):
+• A business owner sharing a growth challenge that marketing can solve: "struggling to get customers online", "need more brand visibility", "our online sales are stagnant"
+• Job postings for marketing roles at a company (Head of Marketing, Digital Marketing Manager, Social Media Manager) — signals the company is investing in marketing and could need agency support
+• A founder asking for advice on scaling, growth, or customer acquisition
+• Company announcing a new product/service or expansion (they will need marketing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ SKIP (is_real_lead: false) — these are NOT leads:
+
+• Thought leadership / opinion posts: marketers, consultants, or agency owners sharing tips, frameworks, or opinions about digital marketing — e.g. "Here are 5 reasons most brands fail at marketing", "Most businesses don't have a budget problem, they have a structure problem", "Why your marketing strategy isn't working"
+• Agency self-promotion: "our agency delivered X results", "we helped brand Y grow", "check out our case study", "we increased ROAS by 3x"
+• Freelancers promoting their own services: "I offer X services", "hire me", "available for projects", "DM for freelance work"
+• Job seekers looking for employment: "open to work", "seeking a role", "looking for a job in digital marketing"
+• Posts already closed or filled: "already hired", "position filled", "found an agency"
+• Fitness, wellness, sports, running, lifestyle posts — even if the person has a company title
+• HR, payroll, compliance, recruitment, insurance, legal posts with no marketing angle
+• Pure news, statistics, industry reports, or platform updates (e.g. "Meta changed its algorithm")
+• Motivational quotes, personal achievements, or life updates with no business/marketing need
+• Marketing coaches or consultants teaching others — they ARE the service, not the buyer
+• Posts where "marketing" or "agency" is just mentioned in passing with no personal buying intent
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY RULE: Ask yourself — "Is this person/company a potential buyer of marketing services?"
+A marketer writing ABOUT marketing ≠ a buyer. A business owner who NEEDS marketing = a buyer.
+
+"Most businesses have a marketing structure problem" → opinion by a marketer → SKIP
+"We're launching our clothing brand and need marketing help" → real need → KEEP
+"Hiring a Digital Marketing Manager at our startup" → company investing in marketing → KEEP
+"I'm a digital marketing freelancer, hire me" → service provider → SKIP
 
 POST:
 {post_content}
@@ -92,8 +115,7 @@ def _filter_one(post_content: str) -> dict:
             last_err = e
             log.warning(f"Gemini filter failed: {e}")
     log.error(f"Both AI providers failed: {last_err}")
-    # Default KEEP on AI failure — filter is permissive, safer to include
-    return {"is_real_lead": True, "reason": "AI unavailable — defaulting to keep"}
+    return {"is_real_lead": False, "reason": "AI unavailable — defaulting to skip"}
 
 
 async def _filter_one_async(post: dict) -> tuple[dict, dict]:
@@ -103,8 +125,8 @@ async def _filter_one_async(post: dict) -> tuple[dict, dict]:
         if not isinstance(result, dict) or "is_real_lead" not in result:
             raise ValueError("Malformed response")
     except Exception as e:
-        log.warning(f"Filter parse error, defaulting to keep: {e}")
-        result = {"is_real_lead": True, "reason": f"Parse error — defaulting to keep"}
+        log.warning(f"Filter parse error, defaulting to skip: {e}")
+        result = {"is_real_lead": False, "reason": f"Parse error — defaulting to skip"}
     return post, result
 
 

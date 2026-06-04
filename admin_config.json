@@ -1,23 +1,26 @@
 {
   "scraping": {
     "search_queries": [
-      "\"marketing agency\" OR \"digital agency\" OR \"media agency\"",
-      "\"looking for an agency\" OR \"need a marketing agency\"",
-      "\"recommend a marketing agency\" OR \"suggest a digital agency\"",
-      "\"hiring marketing agency\" OR \"onboarding agency\"",
-      "\"D2C marketing\" OR \"performance marketing agency\"",
-      "\"brand agency\" OR \"growth agency\" India"
+      "looking for a digital marketing agency",
+      "need a marketing agency",
+      "recommend a digital marketing agency",
+      "hiring digital marketing agency",
+      "struggling with social media marketing",
+      "need help with online marketing"
     ],
-    "max_posts_per_query": 10,
-    "total_post_cap": 50,
-    "posted_limit": "24h",
+    "max_posts_per_query": 150,
+    "total_post_cap": 1000,
+    "posted_limit": "week",
     "sort_by": "date",
     "author_industry_ids": [
-      "Marketing and Advertising",
-      "Health, Wellness and Fitness",
       "Apparel and Fashion",
       "Real Estate",
-      "Retail"
+      "Retail",
+      "Consumer Goods",
+      "Food and Beverages",
+      "E-Learning",
+      "Restaurants",
+      "Cosmetics"
     ],
     "author_geo_ids": [],
     "min_post_length": 50
@@ -29,14 +32,26 @@
     "language": "any"
   },
   "enrichment": {
-    "apollo_enabled": true,
+    "apollo_enabled": false,
     "max_enrichment_per_run": 100
   },
   "sending": {
     "daily_email_cap": 100,
-    "email_send_delay_seconds": 2,
+    "email_send_delay_seconds": 3,
     "dry_run_mode": true,
     "excluded_domains": [],
     "reply_to_email": ""
+  },
+  "automation": {
+    "enabled": false,
+    "days": [
+      "monday",
+      "wednesday",
+      "friday"
+    ],
+    "times": [
+      "09:00"
+    ],
+    "timezone": "Asia/Kolkata"
   }
 }
