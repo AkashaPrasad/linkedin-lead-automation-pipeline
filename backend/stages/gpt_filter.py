@@ -5,51 +5,72 @@ from config import has_openai, has_gemini, OPENAI_API_KEY, GEMINI_API_KEY
 
 log = get_logger("gpt_filter")
 
-SYSTEM_PROMPT = "You are a lead qualifier for a digital marketing agency. Return ONLY valid JSON. No markdown."
+SYSTEM_PROMPT = "You are a strict lead qualifier for a creative and digital marketing agency. Return ONLY valid JSON. No markdown."
 
-USER_TEMPLATE = """You are qualifying LinkedIn posts for Decision Pinnacle — a digital marketing agency offering paid ads (Meta/Google), social media management, branding, creative campaigns, and marketplace (Amazon/Flipkart/Myntra/Zepto) growth services.
+USER_TEMPLATE = """You are qualifying LinkedIn posts for Decision Pinnacle — a full-service creative and digital marketing agency based in India. Services: performance marketing (Meta/Google), social media management, branding, creative campaigns, content production, marketplace growth (Amazon/Flipkart/Myntra/Zepto), and PR.
 
-Your job: Decide whether this post represents a potential client — a business or founder who NEEDS or is OPEN TO hiring a digital marketing agency.
+Decision Pinnacle is an AGENCY. It works with brands and businesses as a vendor/agency partner — not as an individual hire.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ KEEP (is_real_lead: true) if the post shows ANY of these signals:
-
-STRONG signals (definitely keep):
-• Explicitly asking for an agency or marketer: "looking for a digital marketing agency", "can anyone recommend a good agency"
-• Seeking recommendations: "which agency should I hire?", "has anyone worked with a good social media agency?"
-• Directly stating a marketing problem: "our ads aren't converting", "struggling with ROAS", "our social media has no engagement", "we tried ads but wasted money"
-• Planning to outsource or scale marketing: "thinking of hiring an agency", "exploring options for marketing", "want to outsource our social media"
-• Brand or product launch with a marketing need: "just launched our D2C brand", "launching on Amazon next month", "starting a new clothing line"
-
-MODERATE signals (keep if the author is a business owner, founder, or brand — NOT a marketer/agency):
-• A business owner sharing a growth challenge that marketing can solve: "struggling to get customers online", "need more brand visibility", "our online sales are stagnant"
-• Job postings for marketing roles at a company (Head of Marketing, Digital Marketing Manager, Social Media Manager) — signals the company is investing in marketing and could need agency support
-• A founder asking for advice on scaling, growth, or customer acquisition
-• Company announcing a new product/service or expansion (they will need marketing)
+YOUR ONLY JOB: Identify posts where a brand, business, or founder is EXPLICITLY stating they are looking to hire or engage an AGENCY (not an individual, not an employee, not a freelancer — an agency).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-❌ SKIP (is_real_lead: false) — these are NOT leads:
+✅ KEEP (is_real_lead: true) ONLY if the post EXPLICITLY asks for an AGENCY
 
-• Thought leadership / opinion posts: marketers, consultants, or agency owners sharing tips, frameworks, or opinions about digital marketing — e.g. "Here are 5 reasons most brands fail at marketing", "Most businesses don't have a budget problem, they have a structure problem", "Why your marketing strategy isn't working"
-• Agency self-promotion: "our agency delivered X results", "we helped brand Y grow", "check out our case study", "we increased ROAS by 3x"
-• Freelancers promoting their own services: "I offer X services", "hire me", "available for projects", "DM for freelance work"
-• Job seekers looking for employment: "open to work", "seeking a role", "looking for a job in digital marketing"
-• Posts already closed or filled: "already hired", "position filled", "found an agency"
-• Fitness, wellness, sports, running, lifestyle posts — even if the person has a company title
-• HR, payroll, compliance, recruitment, insurance, legal posts with no marketing angle
-• Pure news, statistics, industry reports, or platform updates (e.g. "Meta changed its algorithm")
-• Motivational quotes, personal achievements, or life updates with no business/marketing need
-• Marketing coaches or consultants teaching others — they ARE the service, not the buyer
-• Posts where "marketing" or "agency" is just mentioned in passing with no personal buying intent
+The post must clearly say they are looking for one of these:
+→ "digital marketing agency", "creative agency", "branding agency", "social media agency", "performance marketing agency", "content agency", "media agency", "advertising agency", "marketing partner", "agency partner", "marketplace agency", "growth agency", "production house"
+
+Examples that MUST be kept:
+• "Looking for a boutique branding agency with D2C experience — DM portfolio"
+• "We are looking for a creative social media agency for our leather brand"
+• "Can anyone recommend a good digital marketing agency in India?"
+• "Seeking a performance marketing agency for our D2C brand"
+• "We want to onboard a creative agency for our upcoming product launch"
+• "Looking for an agency to handle our Amazon and Flipkart marketplace"
+• "Any good branding or creative agency for a fashion label? Comment below"
+• "We need a social media agency, preferably with experience in beauty/FMCG"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-KEY RULE: Ask yourself — "Is this person/company a potential buyer of marketing services?"
-A marketer writing ABOUT marketing ≠ a buyer. A business owner who NEEDS marketing = a buyer.
+❌ SKIP (is_real_lead: false) — everything else, including:
 
-"Most businesses have a marketing structure problem" → opinion by a marketer → SKIP
-"We're launching our clothing brand and need marketing help" → real need → KEEP
-"Hiring a Digital Marketing Manager at our startup" → company investing in marketing → KEEP
-"I'm a digital marketing freelancer, hire me" → service provider → SKIP
+JOB POSTINGS (skip all individual/employee hires):
+• Hiring a Brand Manager, Marketing Manager, Social Media Manager, Content Writer, Performance Marketer, CMO, Growth Hacker — these are EMPLOYEE hires, not agency hires → SKIP
+• "Looking for a freelance designer / copywriter / strategist" → individual hire → SKIP
+• "Open role: Digital Marketing Executive" → SKIP
+• ANY post with "hiring", "job opening", "full-time", "part-time", "internship", "contract role", "freelancer needed" for an individual person → SKIP
+
+THOUGHT LEADERSHIP & OPINIONS (no matter how relevant the topic):
+• Posts sharing tips, frameworks, opinions, or commentary about marketing, branding, or D2C → SKIP
+• "Here's why most D2C brands fail at marketing" → SKIP
+• "The state of digital advertising in 2025" → SKIP
+• "5 things I learned about brand building" → SKIP
+• Industry news, trend analysis, platform updates → SKIP
+
+AGENCY SELF-PROMOTION:
+• Agencies or marketers showcasing their own work, results, or case studies → SKIP
+
+VAGUE MARKETING CHALLENGES (without explicitly asking for an agency):
+• "Our sales are stagnant" — no mention of needing an agency → SKIP
+• "We just launched our brand" — no mention of needing an agency → SKIP
+• "Struggling with ROAS" — no mention of needing an agency → SKIP
+• Any post describing a business problem WITHOUT explicitly asking for an agency → SKIP
+
+OTHER SKIPS:
+• Job seekers, freelancers promoting themselves → SKIP
+• Fitness, lifestyle, HR, payroll, compliance, insurance posts → SKIP
+• Motivational or personal posts → SKIP
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE SINGLE TEST: Does this post EXPLICITLY say they want to hire or work with an AGENCY?
+If yes → KEEP. If no, or if it could mean an individual hire → SKIP.
+
+"Looking for a social media agency for our apparel brand" → explicitly wants agency → KEEP
+"Hiring a social media manager" → individual hire, not agency → SKIP
+"We need help with our marketing" → vague, no agency mentioned → SKIP
+"Recommend a branding agency" → explicitly wants agency → KEEP
+"Looking for a freelance brand strategist" → individual, not agency → SKIP
+"Our ROAS is poor" → no agency ask → SKIP
+
+When in doubt → SKIP.
 
 POST:
 {post_content}
