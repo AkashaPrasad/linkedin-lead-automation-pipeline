@@ -45,8 +45,22 @@ THOUGHT LEADERSHIP & OPINIONS (no matter how relevant the topic):
 • "5 things I learned about brand building" → SKIP
 • Industry news, trend analysis, platform updates → SKIP
 
-AGENCY SELF-PROMOTION:
-• Agencies or marketers showcasing their own work, results, or case studies → SKIP
+COMPETITOR AGENCY SELF-PROMOTION (very common — skip all of these):
+Any post where a digital marketing / creative / social media / branding / performance marketing / lead generation / web development agency is promoting ITSELF to find clients → SKIP immediately.
+
+Patterns to detect:
+• "At [Agency Name], we help businesses with X, Y, Z" — agency introducing itself → SKIP
+• Post lists services like ✅ Performance Marketing ✅ Social Media ✅ Branding ✅ Lead Generation → agency ad → SKIP
+• Ends with phone number, WhatsApp number, or website URL to contact the agency → SKIP
+• "Looking for a digital marketing agency? Contact us / We are here / Call us" — agency trying to get clients → SKIP
+• Hashtags like #DigitalMarketingAgency #SocialMediaAgency #BrandingAgency #LeadGenerationAgency #MarketingAgencyDelhi — clear agency self-promo → SKIP
+• "We build growth systems / We run ads / We create campaigns for your business" — agency pitch → SKIP
+• Posts in any language (Malayalam, Hindi, Tamil, English, etc.) where an agency is marketing its own services → SKIP
+
+Real examples to SKIP:
+→ "At Yashi Associates, we help brands grow with digital marketing, social media management..." → agency ad → SKIP
+→ "JKS Digital helps businesses grow. Call 8860336294. #DigitalMarketingAgency" → agency ad → SKIP
+→ "Brixads helps businesses across Kerala with branding and campaigns. Call 9744400414" → agency ad → SKIP
 
 VAGUE MARKETING CHALLENGES (without explicitly asking for an agency):
 • "Our sales are stagnant" — no mention of needing an agency → SKIP
