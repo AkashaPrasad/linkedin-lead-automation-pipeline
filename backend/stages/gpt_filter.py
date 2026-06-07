@@ -51,11 +51,13 @@ Any post where a digital marketing / creative / social media / branding / perfor
 Patterns to detect:
 • "At [Agency Name], we help businesses with X, Y, Z" — agency introducing itself → SKIP
 • Post lists services like ✅ Performance Marketing ✅ Social Media ✅ Branding ✅ Lead Generation → agency ad → SKIP
-• Ends with phone number, WhatsApp number, or website URL to contact the agency → SKIP
-• "Looking for a digital marketing agency? Contact us / We are here / Call us" — agency trying to get clients → SKIP
+• "Looking for a digital marketing agency? Contact us / We are here / Call us" — agency trying to get clients by pretending to be a solution → SKIP
 • Hashtags like #DigitalMarketingAgency #SocialMediaAgency #BrandingAgency #LeadGenerationAgency #MarketingAgencyDelhi — clear agency self-promo → SKIP
 • "We build growth systems / We run ads / We create campaigns for your business" — agency pitch → SKIP
+• The author themselves IS the agency offering the service — they are pitching, not buying → SKIP
 • Posts in any language (Malayalam, Hindi, Tamil, English, etc.) where an agency is marketing its own services → SKIP
+
+NOTE: A phone number or website alone does NOT make a post a skip. Only skip if the overall post is clearly an agency advertising its own services to find clients.
 
 Real examples to SKIP:
 → "At Yashi Associates, we help brands grow with digital marketing, social media management..." → agency ad → SKIP
