@@ -1,12 +1,21 @@
 {
   "scraping": {
     "search_queries": [
-      "looking for a digital marketing agency",
-      "need a marketing agency",
-      "recommend a digital marketing agency",
-      "hiring digital marketing agency",
-      "struggling with social media marketing",
-      "need help with online marketing"
+      "\"looking for recommendations\" marketing",
+      "\"can anyone recommend\" agency",
+      "\"anyone worked with\" marketing agency",
+      "\"shortlisting\" marketing agency",
+      "\"evaluating agencies\"",
+      "\"need help with our brand\"",
+      "\"our brand needs\" marketing",
+      "\"looking for a partner\" D2C marketing",
+      "\"open to connect\" marketing agency",
+      "\"DM me\" marketing agency",
+      "\"we are looking for\" performance marketing",
+      "\"hiring an agency\"",
+      "\"onboarding an agency\"",
+      "\"anyone suggest\" digital marketing",
+      "\"our startup needs\" marketing"
     ],
     "max_posts_per_query": 150,
     "total_post_cap": 1000,
