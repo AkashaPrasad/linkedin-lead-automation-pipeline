@@ -393,4 +393,19 @@ async def check_config():
 _frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 if _frontend_dist.exists():
     from fastapi.staticfiles import StaticFiles
-    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="static")
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    class _SPAStaticFiles(StaticFiles):
+        """StaticFiles that never intercepts /api/* paths.
+
+        When a request targets an /api/ route that doesn't exist as a file,
+        raise a 404 so FastAPI's JSON error handler responds instead of
+        serving index.html.
+        """
+
+        async def get_response(self, path: str, scope):
+            if path.startswith("api/") or path == "api":
+                raise StarletteHTTPException(status_code=404)
+            return await super().get_response(path, scope)
+
+    app.mount("/", _SPAStaticFiles(directory=str(_frontend_dist), html=True), name="static")
