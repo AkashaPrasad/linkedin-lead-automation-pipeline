@@ -2,8 +2,12 @@ import asyncio
 import json
 from logger import get_logger
 from config import has_openai, has_gemini, OPENAI_API_KEY, GEMINI_API_KEY
+from ai_utils import AI_BATCH_SIZE, call_with_retries, provider_display_name, provider_order
 
 log = get_logger("gpt_classify")
+
+_openai_client = None
+_gemini_model = None
 
 USER_TEMPLATE = """You are analyzing a LinkedIn post for Decision Pinnacle — a D2C growth and marketing consultancy in India.
 
@@ -64,13 +68,15 @@ def _strip_json_fences(text: str) -> str:
 
 def _call_openai(post_content: str, author_name: str, author_headline: str) -> dict:
     from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
     prompt = USER_TEMPLATE.format(
         post_content=_truncate(post_content),
         author_name=author_name,
         author_headline=author_headline,
     )
-    resp = client.chat.completions.create(
+    resp = _openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
@@ -81,14 +87,16 @@ def _call_openai(post_content: str, author_name: str, author_headline: str) -> d
 
 def _call_gemini(post_content: str, author_name: str, author_headline: str) -> dict:
     import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    global _gemini_model
+    if _gemini_model is None:
+        genai.configure(api_key=GEMINI_API_KEY)
+        _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
     prompt = USER_TEMPLATE.format(
         post_content=_truncate(post_content),
         author_name=author_name,
         author_headline=author_headline,
     )
-    resp = model.generate_content(prompt)
+    resp = _gemini_model.generate_content(prompt)
     return json.loads(_strip_json_fences(resp.text))
 
 
@@ -97,21 +105,37 @@ def _classify_one(post: dict) -> dict:
     content = get_content(post)
     name = get_author_name(post)
     headline = get_author_headline(post)
-    last_err = None
-
-    if has_openai():
-        try:
-            return _call_openai(content, name, headline)
-        except Exception as e:
-            last_err = e
-            log.warning(f"OpenAI classify failed, trying Gemini: {e}")
+    providers = []
     if has_gemini():
+        providers.append(("gemini", lambda: _call_gemini(content, name, headline)))
+    if has_openai():
+        providers.append(("openai", lambda: _call_openai(content, name, headline)))
+
+    if not providers:
+        log.error("No AI providers configured for classify stage")
+        return {"email_in_post": None, "category": "Generic"}
+
+    ordered_names = provider_order([provider_name for provider_name, _ in providers])
+    provider_map = {provider_name: func for provider_name, func in providers}
+    last_err = None
+    failed = []
+
+    for idx, provider_name in enumerate(ordered_names):
         try:
-            return _call_gemini(content, name, headline)
+            return call_with_retries(provider_name, provider_map[provider_name], log, "classify")
         except Exception as e:
             last_err = e
-            log.warning(f"Gemini classify failed: {e}")
-    log.error(f"Both AI providers failed in classify: {last_err}")
+            failed.append(provider_display_name(provider_name))
+            if idx + 1 < len(ordered_names):
+                next_provider = provider_display_name(ordered_names[idx + 1])
+                log.warning(
+                    f"{provider_display_name(provider_name)} classify failed after retries, "
+                    f"trying {next_provider}: {e}"
+                )
+
+    log.error(
+        f"All configured AI providers failed in classify ({', '.join(failed)}): {last_err}"
+    )
     return {"email_in_post": None, "category": "Generic"}
 
 
@@ -138,7 +162,7 @@ async def run_gpt_classify(real_posts: list[dict], emit) -> list[dict]:
 
     total = len(real_posts)
     enriched = []
-    batch_size = 5
+    batch_size = AI_BATCH_SIZE
 
     for i in range(0, total, batch_size):
         batch = real_posts[i:i + batch_size]

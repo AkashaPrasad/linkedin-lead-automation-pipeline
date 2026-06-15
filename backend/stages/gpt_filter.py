@@ -2,8 +2,12 @@ import asyncio
 import json
 from logger import get_logger
 from config import has_openai, has_gemini, OPENAI_API_KEY, GEMINI_API_KEY
+from ai_utils import AI_BATCH_SIZE, call_with_retries, provider_display_name, provider_order
 
 log = get_logger("gpt_filter")
+
+_openai_client = None
+_gemini_model = None
 
 SYSTEM_PROMPT = "You are a strict lead qualifier for a creative and digital marketing agency. Return ONLY valid JSON. No markdown."
 
@@ -115,17 +119,21 @@ def _strip_json(text: str) -> str:
 
 def _call_gemini(post_content: str) -> dict:
     import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    global _gemini_model
+    if _gemini_model is None:
+        genai.configure(api_key=GEMINI_API_KEY)
+        _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
     prompt = SYSTEM_PROMPT + "\n\n" + USER_TEMPLATE.format(post_content=post_content)
-    resp = model.generate_content(prompt)
+    resp = _gemini_model.generate_content(prompt)
     return json.loads(_strip_json(resp.text))
 
 
 def _call_openai(post_content: str) -> dict:
     from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    resp = client.chat.completions.create(
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    resp = _openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -138,20 +146,35 @@ def _call_openai(post_content: str) -> dict:
 
 
 def _filter_one(post_content: str) -> dict:
-    last_err = None
-    if has_openai():
-        try:
-            return _call_openai(post_content)
-        except Exception as e:
-            last_err = e
-            log.warning(f"OpenAI filter failed, trying Gemini: {e}")
+    providers = []
     if has_gemini():
+        providers.append(("gemini", lambda: _call_gemini(post_content)))
+    if has_openai():
+        providers.append(("openai", lambda: _call_openai(post_content)))
+
+    if not providers:
+        log.error("No AI providers configured for filter stage")
+        return {"is_real_lead": False, "reason": "AI unavailable — defaulting to skip"}
+
+    ordered_names = provider_order([name for name, _ in providers])
+    provider_map = {name: func for name, func in providers}
+    last_err = None
+    failed = []
+
+    for idx, provider_name in enumerate(ordered_names):
         try:
-            return _call_gemini(post_content)
+            return call_with_retries(provider_name, provider_map[provider_name], log, "filter")
         except Exception as e:
             last_err = e
-            log.warning(f"Gemini filter failed: {e}")
-    log.error(f"Both AI providers failed: {last_err}")
+            failed.append(provider_display_name(provider_name))
+            if idx + 1 < len(ordered_names):
+                next_provider = provider_display_name(ordered_names[idx + 1])
+                log.warning(
+                    f"{provider_display_name(provider_name)} filter failed after retries, "
+                    f"trying {next_provider}: {e}"
+                )
+
+    log.error(f"All configured AI providers failed in filter ({', '.join(failed)}): {last_err}")
     return {"is_real_lead": False, "reason": "AI unavailable — defaulting to skip"}
 
 
@@ -175,7 +198,7 @@ async def run_gpt_filter(posts: list[dict], emit) -> tuple[list[dict], list[dict
     skipped_posts = []
     total = len(posts)
 
-    batch_size = 5
+    batch_size = AI_BATCH_SIZE
     for i in range(0, total, batch_size):
         batch = posts[i:i + batch_size]
         tasks = [_filter_one_async(p) for p in batch]
