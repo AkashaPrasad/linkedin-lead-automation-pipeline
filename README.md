@@ -107,6 +107,15 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) and press **Run Pipeline**.
 
+## Railway Deployment Note
+
+If a Railway-provided `*.up.railway.app` URL opens for some networks but fails with `ERR_NAME_NOT_RESOLVED` on others, the app may be healthy and the problem may be ISP DNS resolution for Railway subdomains. In production, prefer attaching a custom domain such as `pipeline.yourdomain.com` instead of relying on the default Railway hostname.
+
+If you must test the Railway hostname directly, verify that:
+- the service has **Networking -> Public Networking** enabled
+- the generated Railway domain is attached to the correct service
+- a custom domain's `CNAME` and `TXT` records exactly match Railway's dashboard values
+
 ---
 
 ## Configuration

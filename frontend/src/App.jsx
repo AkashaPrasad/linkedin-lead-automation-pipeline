@@ -188,7 +188,7 @@ export default function App() {
         return
       }
     } catch (e) {
-      setError('Cannot reach backend — is it running on port 8000?')
+      setError('Cannot reach the backend API from this deployment.')
       return
     }
     setIsRunning(true)
@@ -207,7 +207,7 @@ export default function App() {
         return
       }
     } catch (e) {
-      setError('Cannot reach backend — is it running on port 8000?')
+      setError('Cannot reach the backend API from this deployment.')
       return
     }
 
