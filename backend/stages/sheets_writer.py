@@ -7,15 +7,17 @@ log = get_logger("sheets")
 
 HEADERS = [
     "Post Content", "Post URL", "Author Name", "LinkedIn URL", "Author Headline",
-    "Posted Date", "Email From Post", "Apollo Email", "Final Email", "Has Email",
-    "Category", "Lead Status", "Template Sent", "Sent Status", "Sent Timestamp", "Error",
+    "Company Name", "Posted Date", "Search Query", "Email From Post", "Apollo Email",
+    "Final Email", "Has Email", "Category", "Lead Status", "Template Sent",
+    "Sent Status", "Sent Timestamp", "Error",
 ]
 
 COLUMNS = {
     "post_content": 0, "post_url": 1, "author_name": 2, "linkedin_url": 3,
-    "author_headline": 4, "posted_date": 5, "email_from_post": 6, "apollo_email": 7,
-    "final_email": 8, "has_email": 9, "category": 10, "lead_status": 11,
-    "template_sent": 12, "sent_status": 13, "sent_timestamp": 14, "error": 15,
+    "author_headline": 4, "company_name": 5, "posted_date": 6, "search_query": 7,
+    "email_from_post": 8, "apollo_email": 9, "final_email": 10, "has_email": 11,
+    "category": 12, "lead_status": 13, "template_sent": 14, "sent_status": 15,
+    "sent_timestamp": 16, "error": 17,
 }
 
 
@@ -69,7 +71,9 @@ def _post_to_row(post: dict) -> list:
         get_author_name(post),
         get_author_url(post),
         get_author_headline(post),
+        post.get("_company_name") or "",
         str(post.get("postedAt") or post.get("postedDate") or ""),
+        post.get("_search_query") or "",
         post.get("_email_in_post") or "",
         "",  # Apollo email — filled later
         "",  # Final email — filled later
@@ -109,7 +113,7 @@ def _update_columns_sync(ws, posts: list[dict], start_row: int):
                 post.get("_sent_timestamp") or "",
                 post.get("_error") or "",
             ]
-            updates.append({"range": f"H{row}:P{row}", "values": [row_vals]})
+            updates.append({"range": f"J{row}:R{row}", "values": [row_vals]})
 
         if updates:
             for chunk in [updates[i:i + 50] for i in range(0, len(updates), 50)]:

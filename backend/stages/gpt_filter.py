@@ -68,6 +68,16 @@ Real examples to SKIP:
 → "JKS Digital helps businesses grow. Call 8860336294. #DigitalMarketingAgency" → agency ad → SKIP
 → "Brixads helps businesses across Kerala with branding and campaigns. Call 9744400414" → agency ad → SKIP
 
+AGENCY-TO-AGENCY COLLABORATION / PARTNERSHIP / WHITE-LABEL POSTS (skip all of these):
+These are agencies networking with OTHER agencies — not a brand looking to hire an agency — so they are never a real lead, even if phrased as a "need" or "looking for":
+• "Looking for agencies to collaborate / partner with for white-label projects" → agency-to-agency → SKIP
+• "We take on overflow/white-label work from other agencies" or "Open to subcontracting work" → SKIP
+• "Agency partnerships welcome — DM to collaborate" → SKIP
+• "Looking for a production house / freelancer network to fulfill client work" (author is themselves an agency sourcing vendors for ITS OWN clients) → SKIP
+• "Any agencies open to revenue-share / referral partnerships?" → SKIP
+• Posts explicitly framed as one agency/freelancer-collective seeking alliances, vendor panels, or co-pitching with other agencies/freelancers → SKIP
+The test: if the author's own business IS an agency/creative studio/freelancer collective, and the ask is about teaming up with OTHER agencies/freelancers (not about hiring one to serve their own brand) → SKIP, reason "Agency-to-agency collaboration, not a brand lead".
+
 VAGUE MARKETING CHALLENGES (without explicitly asking for an agency):
 • "Our sales are stagnant" — no mention of needing an agency → SKIP
 • "We just launched our brand" — no mention of needing an agency → SKIP
@@ -80,8 +90,24 @@ OTHER SKIPS:
 • Motivational or personal posts → SKIP
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THE SINGLE TEST: Does this post EXPLICITLY say they want to hire or work with an AGENCY?
-If yes → KEEP. If no, or if it could mean an individual hire → SKIP.
+LOCATION RULES — Decision Pinnacle is based in Bangalore (Bengaluru), India. Apply these checks AFTER confirming the post is a real agency-seeking lead:
+
+RULE 1 — Explicit non-Bangalore city restriction → SKIP:
+If the post EXPLICITLY restricts the search to agencies physically based in a specific Indian city/region OTHER than Bangalore/Bengaluru (e.g. "looking for Hyderabad-based agencies only", "Mumbai agencies only please", "need a Delhi NCR based agency", "only Pune agencies need apply") → SKIP, reason "Location restricted to non-Bangalore city".
+- If the post says "Bangalore/Bengaluru agencies", "PAN India", "remote-friendly", "anywhere in India", or simply doesn't restrict by city → this rule does NOT apply, proceed normally.
+
+RULE 2 — Brand/business based outside India → SKIP, with a design exception:
+If the post or author context makes it clear the BRAND/BUSINESS itself is based outside India (e.g. "we are a US-based startup", "our brand in Dubai", "UK clothing brand", non-Indian currency/market mentioned as the brand's home market) → SKIP, reason "Business based outside India", UNLESS the post is specifically asking for one of these THREE service types, which may be sourced globally regardless of brand location:
+   • Website design / web development
+   • Brand logo design
+   • Packaging design
+  If it's one of these three → this rule does NOT apply, proceed normally (still subject to all other rules above).
+
+RULE 3 — Default (most common case): if the post does not mention any location restriction or any non-India business location at all, do NOT skip on location grounds — assume it is eligible and proceed normally.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE SINGLE TEST: Does this post EXPLICITLY say they want to hire or work with an AGENCY, AND does it pass the LOCATION RULES above?
+If yes to both → KEEP. If no, or if it could mean an individual hire, or it fails a location rule → SKIP.
 
 "Looking for a social media agency for our apparel brand" → explicitly wants agency → KEEP
 "Hiring a social media manager" → individual hire, not agency → SKIP

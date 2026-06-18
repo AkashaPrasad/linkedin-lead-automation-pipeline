@@ -1,9 +1,9 @@
 const CATEGORY_COLORS = {
-  'Growth': 'bg-green-accent/10 text-green-accent border-green-accent/20',
-  'Branding': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
-  'Creative & Campaign': 'bg-amber-accent/10 text-amber-accent border-amber-accent/20',
-  'Social Media': 'bg-blue-400/10 text-blue-400 border-blue-400/20',
-  'Marketplace': 'bg-orange-400/10 text-orange-400 border-orange-400/20',
+  'FMCG': 'bg-green-accent/10 text-green-accent border-green-accent/20',
+  'Real Estate': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
+  'Apparel': 'bg-amber-accent/10 text-amber-accent border-amber-accent/20',
+  'Kids': 'bg-blue-400/10 text-blue-400 border-blue-400/20',
+  'Beauty': 'bg-orange-400/10 text-orange-400 border-orange-400/20',
   'Generic': 'bg-text-muted/10 text-text-secondary border-text-muted/20',
 }
 

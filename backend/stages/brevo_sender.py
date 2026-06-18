@@ -68,13 +68,14 @@ def _load_templates() -> dict:
             return json.loads(TEMPLATES_FILE.read_text())
         except Exception:
             pass
-    from templates import growth, branding, creative, social_media, generic
+    from templates import growth, branding, creative, generic, marketplace
     return {
-        "Growth": {"subject": growth.SUBJECT, "body": growth.BODY},
-        "Branding": {"subject": branding.SUBJECT, "body": branding.BODY},
-        "Creative & Campaign": {"subject": creative.SUBJECT, "body": creative.BODY},
-        "Social Media": {"subject": social_media.SUBJECT, "body": social_media.BODY},
+        "Beauty": {"subject": growth.SUBJECT, "body": growth.BODY},
+        "Apparel": {"subject": branding.SUBJECT, "body": branding.BODY},
+        "Kids": {"subject": creative.SUBJECT, "body": creative.BODY},
+        "Real Estate": {"subject": generic.SUBJECT, "body": generic.BODY},
         "Generic": {"subject": generic.SUBJECT, "body": generic.BODY},
+        "FMCG": {"subject": marketplace.SUBJECT, "body": marketplace.BODY},
     }
 
 

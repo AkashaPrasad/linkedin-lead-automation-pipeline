@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const CATEGORIES = ['Growth', 'Branding', 'Creative & Campaign', 'Social Media', 'Marketplace', 'Generic']
+const CATEGORIES = ['Generic', 'FMCG', 'Real Estate', 'Apparel', 'Kids', 'Beauty']
 
 const CATEGORY_COLORS = {
-  'Growth': 'text-green-accent border-green-accent/30 bg-green-accent/5',
-  'Branding': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Creative & Campaign': 'text-amber-accent border-amber-accent/30 bg-amber-accent/5',
-  'Social Media': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
-  'Marketplace': 'text-orange-400 border-orange-400/30 bg-orange-400/5',
+  'FMCG': 'text-green-accent border-green-accent/30 bg-green-accent/5',
+  'Real Estate': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
+  'Apparel': 'text-amber-accent border-amber-accent/30 bg-amber-accent/5',
+  'Kids': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
+  'Beauty': 'text-orange-400 border-orange-400/30 bg-orange-400/5',
   'Generic': 'text-text-secondary border-border-color bg-bg-tertiary',
 }
 
@@ -383,7 +383,7 @@ function TestEmailModal({ defaultCategory, templates, onClose }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TemplateEditor() {
-  const [activeCategory, setActiveCategory] = useState('Growth')
+  const [activeCategory, setActiveCategory] = useState('Generic')
   const [templates, setTemplates] = useState({})
   const [saved, setSaved] = useState({})
   const [loading, setLoading] = useState(true)

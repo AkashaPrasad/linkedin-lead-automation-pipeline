@@ -254,14 +254,14 @@ TEMPLATES_FILE = Path(__file__).parent.parent / "templates.json"
 
 
 def _default_templates() -> dict:
-    from templates import growth, branding, creative, social_media, generic, marketplace
+    from templates import growth, branding, creative, generic, marketplace
     return {
-        "Growth": {"subject": growth.SUBJECT, "body": growth.BODY},
-        "Branding": {"subject": branding.SUBJECT, "body": branding.BODY},
-        "Creative & Campaign": {"subject": creative.SUBJECT, "body": creative.BODY},
-        "Social Media": {"subject": social_media.SUBJECT, "body": social_media.BODY},
-        "Marketplace": {"subject": marketplace.SUBJECT, "body": marketplace.BODY},
+        "Beauty": {"subject": growth.SUBJECT, "body": growth.BODY},
+        "Apparel": {"subject": branding.SUBJECT, "body": branding.BODY},
+        "Kids": {"subject": creative.SUBJECT, "body": creative.BODY},
+        "Real Estate": {"subject": generic.SUBJECT, "body": generic.BODY},
         "Generic": {"subject": generic.SUBJECT, "body": generic.BODY},
+        "FMCG": {"subject": marketplace.SUBJECT, "body": marketplace.BODY},
     }
 
 
@@ -353,27 +353,56 @@ async def apollo_plan_check():
     from config import APOLLO_API_KEY
     if not APOLLO_API_KEY or APOLLO_API_KEY.startswith("your_"):
         return {"accessible": False, "reason": "No Apollo API key configured"}
-    try:
-        headers = {"X-Api-Key": APOLLO_API_KEY, "Content-Type": "application/json"}
-        r = await asyncio.to_thread(
-            lambda: req.post(
-                "https://api.apollo.io/api/v1/people/bulk_match",
-                json={"details": [{"linkedin_url": "https://www.linkedin.com/in/test"}]},
-                headers=headers,
-                timeout=10,
+    headers = {"X-Api-Key": APOLLO_API_KEY, "Content-Type": "application/json"}
+    # Mirror the real enrichment call exactly (same payload shape, including
+    # reveal_personal_emails) so this check reflects what a live run will actually hit.
+    payload = {
+        "reveal_personal_emails": True,
+        "details": [{"linkedin_url": "https://www.linkedin.com/in/test"}],
+    }
+    last_status = None
+    last_body = ""
+    for attempt in range(2):
+        try:
+            r = await asyncio.to_thread(
+                lambda: req.post(
+                    "https://api.apollo.io/api/v1/people/bulk_match",
+                    json=payload,
+                    headers=headers,
+                    timeout=10,
+                )
             )
-        )
+        except Exception as e:
+            return {"accessible": False, "reason": str(e)[:100]}
+
         if r.status_code == 200:
             return {"accessible": True, "reason": "Email enrichment is available"}
-        if r.status_code == 403:
+        if r.status_code == 401:
+            return {"accessible": False, "reason": "Apollo API key is invalid or expired"}
+        if r.status_code == 429 and attempt == 0:
+            continue  # rate limited on first try — retry once before concluding anything
+        last_status = r.status_code
+        try:
+            last_body = r.json().get("error", "") or r.text[:200]
+        except Exception:
+            last_body = r.text[:200]
+        break
+
+    if last_status == 403:
+        # Only treat this as a real plan restriction if Apollo's own message says so —
+        # a 403 can also come from this probe's throwaway test URL and isn't always plan-related.
+        if "free plan" in last_body.lower() or "inaccessible" in last_body.lower():
             return {
                 "accessible": False,
                 "reason": "Apollo free plan — email enrichment not included",
                 "upgrade_url": "https://app.apollo.io/settings/plans",
             }
-        return {"accessible": False, "reason": f"Apollo returned {r.status_code}"}
-    except Exception as e:
-        return {"accessible": False, "reason": str(e)[:100]}
+        return {
+            "accessible": False,
+            "reason": f"Apollo access denied: {last_body or 'unknown reason'} "
+                       "(this may be a key/permission issue rather than your plan tier — verify in Apollo settings)",
+        }
+    return {"accessible": False, "reason": f"Apollo returned {last_status}: {last_body}"[:200]}
 
 
 # ── Config check endpoint ─────────────────────────────────────────────────────

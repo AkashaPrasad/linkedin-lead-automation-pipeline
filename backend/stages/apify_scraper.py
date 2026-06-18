@@ -1,24 +1,30 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from logger import get_logger
 from config import APIFY_API_TOKEN, APIFY_ACTOR_ID
 
 log = get_logger("apify")
 
 
-_VALID_POSTED_LIMITS = {"any", "1h", "24h", "week", "month", "3months", "6months", "year"}
+# "48h" is not a native Apify postedLimit value — we emulate it below via postedLimitDate.
+_VALID_POSTED_LIMITS = {"any", "1h", "24h", "48h", "week", "month", "3months", "6months", "year"}
 
-def _build_run_input(cfg: dict) -> dict:
+def _build_run_input(cfg: dict, query: str) -> dict:
     scraping = cfg.get("scraping", {})
     posted_limit = scraping.get("posted_limit", "month")
     if posted_limit not in _VALID_POSTED_LIMITS:
         log.warning(f"Invalid postedLimit '{posted_limit}', falling back to 'month'")
         posted_limit = "month"
     run_input = {
-        "searchQueries": scraping.get("search_queries", ["marketing agency"]),
+        "searchQueries": [query],
         "maxPostsPerQuery": scraping.get("max_posts_per_query", 50),
         "sortBy": scraping.get("sort_by", "date"),
-        "postedLimit": posted_limit,
     }
+    if posted_limit == "48h":
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+        run_input["postedLimitDate"] = cutoff.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    else:
+        run_input["postedLimit"] = posted_limit
     if scraping.get("author_industry_ids"):
         run_input["authorIndustryIds"] = [str(i) for i in scraping["author_industry_ids"]]
     if scraping.get("author_geo_ids"):
@@ -35,33 +41,66 @@ def _run_apify_sync(run_input: dict) -> list[dict]:
     return dataset_client.list_items().items
 
 
+def _run_apify_for_query_sync(cfg: dict, query: str) -> list[dict]:
+    """Runs the actor for a single search query and tags each result with the query
+    that produced it, so the sheet can show which keywords are converting best."""
+    run_input = _build_run_input(cfg, query)
+    posts = _run_apify_sync(run_input)
+    for p in posts:
+        p["_search_query"] = query
+    return posts
+
+
 async def run_apify(emit, cfg: dict | None = None) -> list[dict]:
     if cfg is None:
         from admin_config import load
         cfg = load()
 
     scraping = cfg.get("scraping", {})
-    run_input = _build_run_input(cfg)
+    queries = scraping.get("search_queries") or ["marketing agency"]
     total_cap = scraping.get("total_post_cap", 500)
     min_len = cfg.get("filtering", {}).get("min_post_length", 50)
 
     await emit({"event": "stage_start", "stage": 1, "name": "Apify Scraper",
-                "message": f"Scraping LinkedIn with {len(run_input['searchQueries'])} keywords..."})
-    await emit({"event": "progress", "stage": 1, "message": "Apify run started, waiting for completion..."})
+                "message": f"Scraping LinkedIn with {len(queries)} keywords..."})
+    await emit({"event": "progress", "stage": 1, "message": "Apify runs started, waiting for completion..."})
 
-    try:
-        posts = await asyncio.to_thread(_run_apify_sync, run_input)
-    except Exception as e:
-        err = str(e)
-        if "actor" in err.lower() and "not found" in err.lower():
-            raise RuntimeError("Invalid Apify actor ID in .env")
-        raise RuntimeError(f"Apify scrape failed: {err}")
+    # Run one Apify call per query (sequentially, on worker threads) so we can tag
+    # each post with the exact search query that found it — needed to see which
+    # keywords are converting best.
+    posts: list[dict] = []
+    errors: list[str] = []
+    for query in queries:
+        try:
+            query_posts = await asyncio.to_thread(_run_apify_for_query_sync, cfg, query)
+            posts.extend(query_posts)
+            await emit({"event": "progress", "stage": 1,
+                        "message": f"'{query}' → {len(query_posts)} posts"})
+        except Exception as e:
+            err = str(e)
+            if "actor" in err.lower() and "not found" in err.lower():
+                raise RuntimeError("Invalid Apify actor ID in .env")
+            errors.append(f"{query}: {err}")
+            log.warning(f"Apify query '{query}' failed: {err}")
 
     if not posts:
-        raise RuntimeError("Apify returned 0 results — no posts found for given search queries")
+        detail = f" ({'; '.join(errors)})" if errors else ""
+        raise RuntimeError(f"Apify returned 0 results — no posts found for given search queries{detail}")
+
+    # Deduplicate posts matched by multiple queries, keeping the first query tag
+    from post_fields import get_post_url, get_content
+    seen_urls: set[str] = set()
+    deduped: list[dict] = []
+    for p in posts:
+        url = get_post_url(p)
+        if url and url in seen_urls:
+            continue
+        if url:
+            seen_urls.add(url)
+        deduped.append(p)
+    posts = deduped
 
     # Filter empty content (HarvestAPI uses 'content' field, not 'text')
-    from post_fields import get_content
     posts = [p for p in posts if get_content(p)]
 
     # Filter by minimum post length

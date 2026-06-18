@@ -21,11 +21,32 @@ function Field({ label, hint, children }) {
 }
 
 function NumberInput({ value, onChange, min = 0, max = 99999, step = 1 }) {
+  const [raw, setRaw] = useState(String(value))
+
+  useEffect(() => {
+    if (Number(raw) !== value) setRaw(String(value))
+  }, [value])
+
+  const commit = (str) => {
+    const trimmed = str.trim()
+    let num = trimmed === '' ? min : Number(trimmed)
+    if (Number.isNaN(num)) num = min
+    num = Math.min(max, Math.max(min, num))
+    setRaw(String(num))
+    onChange(num)
+  }
+
   return (
     <input
       type="number"
-      value={value}
-      onChange={e => onChange(Number(e.target.value))}
+      value={raw}
+      onChange={e => {
+        const v = e.target.value
+        setRaw(v)
+        const num = Number(v)
+        if (v.trim() !== '' && !Number.isNaN(num)) onChange(num)
+      }}
+      onBlur={e => commit(e.target.value)}
       min={min}
       max={max}
       step={step}
@@ -171,7 +192,7 @@ function ScrapingTab({ cfg, onChange }) {
         <div className="space-y-4">
           <SectionLabel>Post Limits</SectionLabel>
           <Field label="Max Posts Per Keyword" hint="How many posts to scrape for each search query (max 200)">
-            <NumberInput value={s.max_posts_per_query || 50} onChange={v => set('max_posts_per_query', v)} min={10} max={200} step={10} />
+            <NumberInput value={s.max_posts_per_query || 50} onChange={v => set('max_posts_per_query', v)} min={5} max={200} step={5} />
           </Field>
           <Field label="Total Post Cap" hint="Hard limit on total posts across all keywords per run">
             <NumberInput value={s.total_post_cap || 500} onChange={v => set('total_post_cap', v)} min={50} max={2000} step={50} />
@@ -191,6 +212,7 @@ function ScrapingTab({ cfg, onChange }) {
                 { value: 'any', label: 'Any time' },
                 { value: '1h', label: 'Past 1 hour' },
                 { value: '24h', label: 'Past 24 hours' },
+                { value: '48h', label: 'Past 48 hours' },
                 { value: 'week', label: 'Past week' },
                 { value: 'month', label: 'Past month' },
                 { value: '3months', label: 'Past 3 months' },
@@ -308,7 +330,7 @@ function EnrichmentTab({ cfg, onChange }) {
           <div className="flex-1">
             <p className="text-sm font-bold text-amber-accent">Apollo Email Enrichment Not Available</p>
             <p className="text-xs text-amber-accent/80 mt-1 leading-relaxed">
-              {apolloPlan.reason}. Your current plan does not include the people lookup API.
+              {apolloPlan.reason}.
               This means leads without an email in their post will be marked <strong>NO_EMAIL</strong> and won't receive your outreach.
             </p>
             <p className="text-xs text-amber-accent/80 mt-2">

@@ -9,37 +9,53 @@ log = get_logger("gpt_classify")
 _openai_client = None
 _gemini_model = None
 
-USER_TEMPLATE = """You are analyzing a LinkedIn post for Decision Pinnacle — a D2C growth and marketing consultancy in India.
+USER_TEMPLATE = """You are analyzing a LinkedIn post for Decision Pinnacle — a full-service creative and digital marketing agency in India that works across multiple consumer industries.
 
-Decision Pinnacle's service lines:
-• Growth: Meta/Google/YouTube paid performance, ROAS optimisation, CAC reduction, D2C brand scaling, conversion rate, retargeting, funnel strategy
-• Branding: brand identity, brand book, brand positioning, visual identity, rebranding, brand persona, brand strategy
-• Creative & Campaign: ad films, TVCs, brand films, shoots (catalogue/lifestyle), UGC, influencer campaigns, video production, campaign concepts
-• Social Media: Instagram/LinkedIn organic management, reels, content calendar, community management, social media strategy
-• Marketplace: Amazon / Myntra / Flipkart / Zepto / Blinkit / Meesho / FirstCry — campaign management, TACOS, ROAS on marketplace, PDP SEO, keyword strategy, BSR improvement, new channel launch, quick commerce, DSP, listing optimisation, pricing strategy on marketplace, inventory management
-• Generic: general marketing agency need, unclear mix, or equally mentions multiple services
+Decision Pinnacle classifies every qualified lead into exactly ONE of 6 INDUSTRY VERTICALS based on the AUTHOR'S BRAND/BUSINESS — never based on what marketing service they're asking for.
 
-Extract two things from the post below:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INDUSTRY VERTICALS
+
+1. "FMCG" — Fast-Moving Consumer Goods: packaged food & snacks, beverages, dairy, edible oils, home care / cleaning products, plain hygiene staples (soap, toothpaste, detergent, sanitizer), grocery/CPG, nutrition & wellness supplements, pet food, and other fast-turnover consumable goods.
+   Signals: "FMCG", "CPG", "packaged food", "snacks brand", "beverage", "D2C food brand", "home care", "consumer goods", "grocery".
+
+2. "Real Estate" — property developers/builders, real estate brokers and consultants, construction companies, property portals, project-launch marketing (apartments/villas/plots/commercial spaces), real estate finance/home-loan marketing.
+   Signals: "real estate", "property", "builder", "developer", "apartments", "villas", "plots", "RERA", "construction", "realty".
+
+3. "Apparel" — clothing and fashion brands for ADULTS, footwear, fashion accessories, textiles, ethnic/western wear, activewear. (Use "Kids" instead if the apparel is specifically for children/babies.)
+   Signals: "apparel", "fashion brand", "clothing", "footwear", "ethnic wear", "D2C fashion".
+
+4. "Kids" — baby and children's products of ANY type: baby care, diapers, baby gear (strollers/cribs), kids' clothing/footwear/toys, maternity products, parenting brands. Kids/baby ALWAYS outranks Apparel or Beauty when the product is explicitly for infants/children.
+   Signals: "baby", "kids", "infant", "toddler", "parenting", "maternity", "toys", "diaper", "baby care", "children's".
+
+5. "Beauty" — cosmetics, skincare, haircare, makeup, fragrance/perfume, grooming, and beauty & personal care (BPC) brands for adults (non-baby).
+   Signals: "beauty", "skincare", "cosmetics", "makeup", "haircare", "BPC", "grooming", "fragrance", "perfume", "personal care" (only when clearly cosmetic, not a plain hygiene staple).
+
+6. "Generic" — anything that does not clearly fit one of the 5 verticals above (e.g. SaaS/tech, fintech, healthcare, education, automotive, B2B services, home decor/furniture), OR the post equally spans multiple unrelated verticals, OR the industry genuinely cannot be determined from the post or author context.
+
+TIEBREAKERS (apply in this order — never skip these):
+- Baby/kids product → ALWAYS "Kids", even if it's also apparel ("baby clothing"), beauty ("baby skincare"), or FMCG ("baby food").
+- Cosmetic/skincare/makeup product → "Beauty", even if sold through FMCG-style D2C channels.
+- Plain hygiene/cleaning staple (soap, toothpaste, detergent, sanitizer) with NO beauty/cosmetic positioning → "FMCG".
+- Food, beverage, or home-care product → "FMCG".
+- Real estate company that also mentions interior design/home decor as a side line → still "Real Estate" if the core business is property sales/development; if the post is ONLY about home decor/furniture with no property angle → "Generic".
+- Two unrelated industries mentioned with equal weight, neither dominant → "Generic".
+- Cannot tell the industry from the post or author headline/company → "Generic". Never guess wildly.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Extract THREE things from the post below:
 
 1. EMAIL: Scan the entire post for any email address.
    - Look for direct emails: name@company.com
    - Look for obfuscated emails: "name [at] company [dot] com", "name(at)company.com", "reach me at name@..." — convert to standard format
    - If found, return the email string. If not found, return null.
 
-2. CATEGORY: Based on the author's industry context AND what service they appear to need, pick exactly ONE:
-   - "Growth" — they need paid performance marketing, ROAS improvement, D2C revenue scaling via ads
-   - "Branding" — they need brand identity, positioning, brand strategy, visual identity
-   - "Creative & Campaign" — they need ad films, shoots, production, influencer campaigns, campaign concepts
-   - "Social Media" — they need organic social media management, Instagram/LinkedIn content, reels strategy
-   - "Marketplace" — they need help with Amazon/Myntra/Flipkart/Zepto/Blinkit/quick commerce sales and management
-   - "Generic" — unclear need, multiple services equally, or general "marketing agency" requirement
+2. COMPANY NAME: Identify the brand/company the author represents (NOT Decision Pinnacle, and not a recruiter's own staffing agency unless that agency is itself the client looking to hire).
+   - Prefer an explicit company/brand name mentioned in the post content (e.g. "We at Sleepyhead are looking for..." → "Sleepyhead").
+   - If not in the post, infer it from the AUTHOR HEADLINE (e.g. "Founder at Sleepyhead" → "Sleepyhead", "Marketing Lead, XYZ Pvt Ltd" → "XYZ Pvt Ltd").
+   - If genuinely no company name is identifiable from either source, return null. Do not invent a name.
 
-   Tiebreaker rules:
-   - If post mentions both ads AND marketplace, pick "Marketplace" if they specifically mention Amazon/Myntra/Zepto channels; otherwise "Growth"
-   - Real estate companies → usually "Social Media" or "Creative & Campaign" (they rarely run D2C performance marketing)
-   - D2C brands mentioning revenue/ROAS/CAC → "Growth"
-   - D2C brands mentioning "we just launched on Amazon" or "struggling with Myntra" → "Marketplace"
-   - When genuinely unclear → "Generic"
+3. CATEGORY: Pick exactly ONE of: "FMCG", "Real Estate", "Apparel", "Kids", "Beauty", "Generic" using the vertical definitions and tiebreakers above.
 
 POST CONTENT:
 {post_content}
@@ -48,9 +64,9 @@ AUTHOR NAME: {author_name}
 AUTHOR HEADLINE: {author_headline}
 
 Return ONLY this exact JSON (no markdown, no explanation):
-{{"email_in_post": "email@example.com or null", "category": "Growth"}}"""
+{{"email_in_post": "email@example.com or null", "company_name": "Company Name or null", "category": "FMCG"}}"""
 
-VALID_CATEGORIES = {"Growth", "Branding", "Creative & Campaign", "Social Media", "Marketplace", "Generic"}
+VALID_CATEGORIES = {"FMCG", "Real Estate", "Apparel", "Kids", "Beauty", "Generic"}
 
 
 def _truncate(text: str, max_chars: int = 3000) -> str:
@@ -113,7 +129,7 @@ def _classify_one(post: dict) -> dict:
 
     if not providers:
         log.error("No AI providers configured for classify stage")
-        return {"email_in_post": None, "category": "Generic"}
+        return {"email_in_post": None, "company_name": None, "category": "Generic"}
 
     ordered_names = provider_order([provider_name for provider_name, _ in providers])
     provider_map = {provider_name: func for provider_name, func in providers}
@@ -136,7 +152,7 @@ def _classify_one(post: dict) -> dict:
     log.error(
         f"All configured AI providers failed in classify ({', '.join(failed)}): {last_err}"
     )
-    return {"email_in_post": None, "category": "Generic"}
+    return {"email_in_post": None, "company_name": None, "category": "Generic"}
 
 
 async def _classify_one_async(post: dict) -> tuple[dict, dict]:
@@ -150,9 +166,12 @@ async def _classify_one_async(post: dict) -> tuple[dict, dict]:
         email = result.get("email_in_post")
         if email and (str(email).lower() in ("null", "none", "") or "@" not in str(email)):
             result["email_in_post"] = None
+        company = result.get("company_name")
+        if company and str(company).strip().lower() in ("null", "none", ""):
+            result["company_name"] = None
     except Exception as e:
         log.warning(f"Classify parse error: {e}")
-        result = {"email_in_post": None, "category": "Generic"}
+        result = {"email_in_post": None, "company_name": None, "category": "Generic"}
     return post, result
 
 
@@ -171,6 +190,7 @@ async def run_gpt_classify(real_posts: list[dict], emit) -> list[dict]:
 
         for post, classification in results:
             post["_email_in_post"] = classification.get("email_in_post")
+            post["_company_name"] = classification.get("company_name")
             post["_category"] = classification.get("category", "Generic")
             enriched.append(post)
 
