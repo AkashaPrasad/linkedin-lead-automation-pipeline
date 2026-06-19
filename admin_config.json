@@ -44,6 +44,30 @@
         "\"Digital Marketing Agency\" NOT (\"Recruitment Agency\" OR Intern)",
         "\"Social Media Agency\" NOT (\"Hiring Agency\" OR Intern)",
         "\"Production House\" NOT (\"Hiring Agency\")"
+      ],
+      "test-2": [
+        "\"looking for a performance marketing agency\" NOT (hiring OR intern)",
+        "\"looking for a D2C marketing agency\" NOT (hiring OR intern)",
+        "\"looking for a D2C growth agency\"",
+        "\"looking for a marketplace growth agency\"",
+        "\"looking for an Amazon marketing agency\"",
+        "\"looking for a branding agency\" NOT (hiring OR intern)",
+        "\"need a brand identity agency\"",
+        "\"looking for a packaging design agency\"",
+        "\"in search of a creative branding agency\"",
+        "\"not happy with our marketing agency\""
+      ],
+      "test-3": [
+        "\"looking for a social media agency\" NOT (hiring OR intern)",
+        "\"need a social media marketing agency\"",
+        "\"looking for a content marketing agency\"",
+        "\"looking for a creative agency\" NOT (hiring OR intern)",
+        "\"need a campaign production agency\"",
+        "\"want to switch our marketing agency\"",
+        "\"recommend a good marketing agency\" NOT hiring",
+        "\"anyone know a good branding agency\"",
+        "\"looking to onboard a marketing agency\" NOT (hiring OR intern)",
+        "\"marketing agency in Bangalore\" NOT (hiring OR intern)"
       ]
     },
     "active_query_set": "search-1",
