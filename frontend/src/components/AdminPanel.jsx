@@ -170,6 +170,15 @@ function QuerySetManager({ s, setMany }) {
   const activeSet = s.active_query_set || ''
   const setNames = Object.keys(querySets)
   const [newSetName, setNewSetName] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  // A click on the ✕ only arms a confirmation — it takes a second click within
+  // 4s on the same chip to actually delete. Prevents misclicks from wiping a set.
+  useEffect(() => {
+    if (!confirmDelete) return
+    const t = setTimeout(() => setConfirmDelete(null), 4000)
+    return () => clearTimeout(t)
+  }, [confirmDelete])
 
   const selectSet = (name) => {
     setMany({ active_query_set: name, search_queries: [...(querySets[name] || [])] })
@@ -201,6 +210,15 @@ function QuerySetManager({ s, setMany }) {
     }
   }
 
+  const handleDeleteClick = (name) => {
+    if (confirmDelete === name) {
+      deleteSet(name)
+      setConfirmDelete(null)
+    } else {
+      setConfirmDelete(name)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -213,17 +231,24 @@ function QuerySetManager({ s, setMany }) {
                 : 'border-border-color bg-bg-primary text-text-secondary hover:border-purple-primary/40'
             }`}
           >
-            <button onClick={() => selectSet(name)} className="text-sm font-medium flex items-center gap-1">
+            <button
+              onClick={() => { setConfirmDelete(null); selectSet(name) }}
+              className="text-sm font-medium flex items-center gap-1 py-0.5"
+            >
               <span>📁</span>
               <span>{name}</span>
               {name === activeSet && <span className="text-purple-light">✓</span>}
             </button>
             <button
-              onClick={() => deleteSet(name)}
-              title={`Delete ${name}`}
-              className="w-4 h-4 rounded flex items-center justify-center text-text-muted hover:text-red-accent transition-colors text-xs"
+              onClick={() => handleDeleteClick(name)}
+              title={confirmDelete === name ? `Click again to permanently delete "${name}"` : `Delete ${name}`}
+              className={`flex items-center justify-center border-l transition-colors flex-shrink-0 ${
+                confirmDelete === name
+                  ? 'border-red-accent/40 text-red-accent text-[11px] font-semibold pl-2 ml-1 h-5 whitespace-nowrap'
+                  : 'border-border-color/60 text-text-muted hover:text-red-accent text-xs w-5 h-5 ml-1 rounded-r'
+              }`}
             >
-              ✕
+              {confirmDelete === name ? 'Confirm ✕' : '✕'}
             </button>
           </div>
         ))}

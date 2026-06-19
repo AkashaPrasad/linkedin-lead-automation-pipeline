@@ -68,6 +68,23 @@
         "\"anyone know a good branding agency\"",
         "\"looking to onboard a marketing agency\" NOT (hiring OR intern)",
         "\"marketing agency in Bangalore\" NOT (hiring OR intern)"
+      ],
+      "test-4": [
+        "\"looking for\" creative agency NOT (hiring OR intern)",
+        "\"shortlisting\" creative marketing agency",
+        "\"evaluating\" creative branding agency",
+        "\"DM me\" creative partner",
+        "\"looking for\" branding partner NOT (hiring OR intern)",
+        "\"looking for\" brand marketing agency NOT (hiring OR intern)",
+        "\"onboarding\" performance marketing partner",
+        "\"shortlisting\" performance marketing agency",
+        "\"looking for\" digital marketing agency NOT (hiring OR intern)",
+        "\"open to\" digital marketing partner",
+        "\"looking for\" production agency NOT (hiring OR intern)",
+        "\"shortlisting\" video production agency",
+        "\"DM me\" production house",
+        "\"looking for\" social media agency NOT (hiring OR intern)",
+        "\"evaluating\" social media partner"
       ]
     },
     "active_query_set": "search-1",
