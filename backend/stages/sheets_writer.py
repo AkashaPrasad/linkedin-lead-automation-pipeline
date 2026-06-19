@@ -6,18 +6,18 @@ from config import GOOGLE_SHEET_ID, service_account_path
 log = get_logger("sheets")
 
 HEADERS = [
-    "Post Content", "Post URL", "Author Name", "LinkedIn URL", "Author Headline",
-    "Company Name", "Posted Date", "Search Query", "Email From Post", "Apollo Email",
-    "Final Email", "Has Email", "Category", "Lead Status", "Template Sent",
-    "Sent Status", "Sent Timestamp", "Error",
+    "Post Content", "Post URL", "Author Name", "LinkedIn URL", "Location (Country)",
+    "Author Headline", "Company Name", "Posted Date", "Search Query", "Email From Post",
+    "Contact Method", "Apollo Email", "Final Email", "Has Email", "Category",
+    "Lead Status", "Template Sent", "Sent Status", "Sent Timestamp", "Error",
 ]
 
 COLUMNS = {
     "post_content": 0, "post_url": 1, "author_name": 2, "linkedin_url": 3,
-    "author_headline": 4, "company_name": 5, "posted_date": 6, "search_query": 7,
-    "email_from_post": 8, "apollo_email": 9, "final_email": 10, "has_email": 11,
-    "category": 12, "lead_status": 13, "template_sent": 14, "sent_status": 15,
-    "sent_timestamp": 16, "error": 17,
+    "location_country": 4, "author_headline": 5, "company_name": 6, "posted_date": 7,
+    "search_query": 8, "email_from_post": 9, "contact_method": 10, "apollo_email": 11,
+    "final_email": 12, "has_email": 13, "category": 14, "lead_status": 15,
+    "template_sent": 16, "sent_status": 17, "sent_timestamp": 18, "error": 19,
 }
 
 
@@ -70,11 +70,13 @@ def _post_to_row(post: dict) -> list:
         get_post_url(post),
         get_author_name(post),
         get_author_url(post),
+        post.get("_location_country") or "",
         get_author_headline(post),
         post.get("_company_name") or "",
         str(post.get("postedAt") or post.get("postedDate") or ""),
         post.get("_search_query") or "",
         post.get("_email_in_post") or "",
+        post.get("_contact_method") or "",
         "",  # Apollo email — filled later
         "",  # Final email — filled later
         "YES" if post.get("_email_in_post") else "NO",
@@ -113,7 +115,7 @@ def _update_columns_sync(ws, posts: list[dict], start_row: int):
                 post.get("_sent_timestamp") or "",
                 post.get("_error") or "",
             ]
-            updates.append({"range": f"J{row}:R{row}", "values": [row_vals]})
+            updates.append({"range": f"L{row}:T{row}", "values": [row_vals]})
 
         if updates:
             for chunk in [updates[i:i + 50] for i in range(0, len(updates), 50)]:

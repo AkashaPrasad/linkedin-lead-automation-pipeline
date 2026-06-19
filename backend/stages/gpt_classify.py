@@ -43,7 +43,7 @@ TIEBREAKERS (apply in this order — never skip these):
 - Cannot tell the industry from the post or author headline/company → "Generic". Never guess wildly.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Extract THREE things from the post below:
+Extract FOUR things from the post below:
 
 1. EMAIL: Scan the entire post for any email address.
    - Look for direct emails: name@company.com
@@ -57,6 +57,12 @@ Extract THREE things from the post below:
 
 3. CATEGORY: Pick exactly ONE of: "FMCG", "Real Estate", "Apparel", "Kids", "Beauty", "Generic" using the vertical definitions and tiebreakers above.
 
+4. CONTACT METHOD: How does the post tell people to reach out? Pick exactly ONE, in this priority order (check Email first, then Phone, then DM — use the highest-priority one that's actually present):
+   - "Email" — an email address is given anywhere in the post (e.g. "email me at x@y.com", "send your portfolio to x@y.com").
+   - "Phone Number" — no email given, but a phone/WhatsApp number is given (e.g. "call/WhatsApp 9876543210", "contact us at +91-...").
+   - "DM on LinkedIn" — no email or phone given, but the post says to message/DM/comment to be contacted (e.g. "DM me", "comment below", "ping me", "message me", "drop a comment and I'll reach out").
+   - "Not specified" — none of the above are present anywhere in the post.
+
 POST CONTENT:
 {post_content}
 
@@ -64,9 +70,10 @@ AUTHOR NAME: {author_name}
 AUTHOR HEADLINE: {author_headline}
 
 Return ONLY this exact JSON (no markdown, no explanation):
-{{"email_in_post": "email@example.com or null", "company_name": "Company Name or null", "category": "FMCG"}}"""
+{{"email_in_post": "email@example.com or null", "company_name": "Company Name or null", "category": "FMCG", "contact_method": "Email"}}"""
 
 VALID_CATEGORIES = {"FMCG", "Real Estate", "Apparel", "Kids", "Beauty", "Generic"}
+VALID_CONTACT_METHODS = {"Email", "Phone Number", "DM on LinkedIn", "Not specified"}
 
 
 def _truncate(text: str, max_chars: int = 3000) -> str:
@@ -129,7 +136,7 @@ def _classify_one(post: dict) -> dict:
 
     if not providers:
         log.error("No AI providers configured for classify stage")
-        return {"email_in_post": None, "company_name": None, "category": "Generic"}
+        return {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": "Not specified"}
 
     ordered_names = provider_order([provider_name for provider_name, _ in providers])
     provider_map = {provider_name: func for provider_name, func in providers}
@@ -152,7 +159,7 @@ def _classify_one(post: dict) -> dict:
     log.error(
         f"All configured AI providers failed in classify ({', '.join(failed)}): {last_err}"
     )
-    return {"email_in_post": None, "company_name": None, "category": "Generic"}
+    return {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": "Not specified"}
 
 
 async def _classify_one_async(post: dict) -> tuple[dict, dict]:
@@ -169,9 +176,15 @@ async def _classify_one_async(post: dict) -> tuple[dict, dict]:
         company = result.get("company_name")
         if company and str(company).strip().lower() in ("null", "none", ""):
             result["company_name"] = None
+        # If we found a real email, contact method should always say "Email" regardless
+        # of what the model picked — the email itself is the most reliable signal.
+        if result.get("email_in_post"):
+            result["contact_method"] = "Email"
+        elif result.get("contact_method") not in VALID_CONTACT_METHODS:
+            result["contact_method"] = "Not specified"
     except Exception as e:
         log.warning(f"Classify parse error: {e}")
-        result = {"email_in_post": None, "company_name": None, "category": "Generic"}
+        result = {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": "Not specified"}
     return post, result
 
 
@@ -192,6 +205,7 @@ async def run_gpt_classify(real_posts: list[dict], emit) -> list[dict]:
             post["_email_in_post"] = classification.get("email_in_post")
             post["_company_name"] = classification.get("company_name")
             post["_category"] = classification.get("category", "Generic")
+            post["_contact_method"] = classification.get("contact_method", "Not specified")
             enriched.append(post)
 
         processed = min(i + batch_size, total)

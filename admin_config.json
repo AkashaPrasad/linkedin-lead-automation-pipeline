@@ -17,6 +17,26 @@
       "\"anyone suggest\" digital marketing",
       "\"our startup needs\" marketing"
     ],
+    "query_sets": {
+      "search-1": [
+        "\"looking for recommendations\" marketing",
+        "\"can anyone recommend\" agency",
+        "\"anyone worked with\" marketing agency",
+        "\"shortlisting\" marketing agency",
+        "\"evaluating agencies\"",
+        "\"need help with our brand\"",
+        "\"our brand needs\" marketing",
+        "\"looking for a partner\" D2C marketing",
+        "\"open to connect\" marketing agency",
+        "\"DM me\" marketing agency",
+        "\"we are looking for\" performance marketing",
+        "\"hiring an agency\"",
+        "\"onboarding an agency\"",
+        "\"anyone suggest\" digital marketing",
+        "\"our startup needs\" marketing"
+      ]
+    },
+    "active_query_set": "search-1",
     "max_posts_per_query": 150,
     "total_post_cap": 1000,
     "posted_limit": "week",

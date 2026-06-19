@@ -164,21 +164,132 @@ function EditableList({ items, onChange, placeholder = 'Add item...', addLabel =
   )
 }
 
+// ── Query set ("folder") manager ───────────────────────────────────────────────
+function QuerySetManager({ s, setMany }) {
+  const querySets = s.query_sets || {}
+  const activeSet = s.active_query_set || ''
+  const setNames = Object.keys(querySets)
+  const [newSetName, setNewSetName] = useState('')
+
+  const selectSet = (name) => {
+    setMany({ active_query_set: name, search_queries: [...(querySets[name] || [])] })
+  }
+
+  const persistAs = (name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setMany({
+      query_sets: { ...querySets, [trimmed]: [...(s.search_queries || [])] },
+      active_query_set: trimmed,
+    })
+  }
+
+  const updateActiveSet = () => {
+    if (!activeSet) return
+    persistAs(activeSet)
+  }
+
+  const deleteSet = (name) => {
+    const next = { ...querySets }
+    delete next[name]
+    const remaining = Object.keys(next)
+    const fallback = remaining[0] || ''
+    if (activeSet === name) {
+      setMany({ query_sets: next, active_query_set: fallback, search_queries: [...(next[fallback] || [])] })
+    } else {
+      setMany({ query_sets: next })
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {setNames.map(name => (
+          <div
+            key={name}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors ${
+              name === activeSet
+                ? 'border-purple-primary bg-purple-primary/10 text-purple-light'
+                : 'border-border-color bg-bg-primary text-text-secondary hover:border-purple-primary/40'
+            }`}
+          >
+            <button onClick={() => selectSet(name)} className="text-sm font-medium flex items-center gap-1">
+              <span>📁</span>
+              <span>{name}</span>
+              {name === activeSet && <span className="text-purple-light">✓</span>}
+            </button>
+            <button
+              onClick={() => deleteSet(name)}
+              title={`Delete ${name}`}
+              className="w-4 h-4 rounded flex items-center justify-center text-text-muted hover:text-red-accent transition-colors text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {setNames.length === 0 && (
+          <p className="text-xs text-text-muted italic px-1">No saved query sets yet — save one below</p>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newSetName}
+          onChange={e => setNewSetName(e.target.value)}
+          placeholder="New set name, e.g. search-2..."
+          className="flex-1 bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-purple-primary/50 transition-colors"
+        />
+        <button
+          onClick={() => { persistAs(newSetName); setNewSetName('') }}
+          disabled={!newSetName.trim()}
+          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          Save list as new set
+        </button>
+        {activeSet && (
+          <button
+            onClick={updateActiveSet}
+            className="px-4 py-2 rounded-lg bg-bg-tertiary border border-border-color text-text-secondary text-sm font-medium hover:bg-bg-tertiary/70 transition-colors whitespace-nowrap"
+          >
+            Update "{activeSet}"
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Tab panels ────────────────────────────────────────────────────────────────
 
 function ScrapingTab({ cfg, onChange }) {
   const s = cfg.scraping || {}
   const set = (key, val) => onChange({ ...cfg, scraping: { ...s, [key]: val } })
+  const setMany = (patch) => onChange({ ...cfg, scraping: { ...s, ...patch } })
   const flt = cfg.filtering || {}
   const setF = (key, val) => onChange({ ...cfg, filtering: { ...flt, [key]: val } })
 
   return (
     <div className="space-y-8">
       <div className="space-y-4">
-        <SectionLabel>Search Keywords</SectionLabel>
+        <SectionLabel>Search Query Sets</SectionLabel>
+        <Field
+          label="Saved Sets"
+          hint="Save different keyword lists as named sets and switch between them. Selecting a set loads its queries into the list below; editing the list only updates the active set once you click Update."
+        >
+          <QuerySetManager s={s} setMany={setMany} />
+        </Field>
+      </div>
+
+      <div className="space-y-4">
+        <SectionLabel>
+          Search Keywords{s.active_query_set && (
+            <span className="text-text-muted font-normal normal-case tracking-normal"> — editing "{s.active_query_set}"</span>
+          )}
+        </SectionLabel>
         <Field
           label="Search Queries"
-          hint="LinkedIn posts matching any of these keywords will be scraped. Use specific phrases for better lead quality."
+          hint="LinkedIn posts matching any of these keywords will be scraped. This is the active list that will run — use 'Update' above to save edits into the selected set."
         >
           <EditableList
             items={s.search_queries || []}
