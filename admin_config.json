@@ -34,6 +34,16 @@
         "\"onboarding an agency\"",
         "\"anyone suggest\" digital marketing",
         "\"our startup needs\" marketing"
+      ],
+      "testing-1": [
+        "\"Creative Agency\" NOT (\"Hiring Agency\" OR \"Recruitment Agency\")",
+        "\"Creative Marketing Agency\" NOT (\"Hiring\" OR Intern)",
+        "\"Creative Branding Agency\" NOT (\"Recruitment Agency\")",
+        "\"Branding Partner\" NOT (\"Fund Raising\" OR \"Profit Sharing\")",
+        "\"Performance Marketing Agency\" NOT (\"Hiring Agency\")",
+        "\"Digital Marketing Agency\" NOT (\"Recruitment Agency\" OR Intern)",
+        "\"Social Media Agency\" NOT (\"Hiring Agency\" OR Intern)",
+        "\"Production House\" NOT (\"Hiring Agency\")"
       ]
     },
     "active_query_set": "search-1",
