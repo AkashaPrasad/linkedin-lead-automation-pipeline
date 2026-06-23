@@ -304,6 +304,17 @@ function LinkedInCookieManager() {
   const updateCookie = async () => {
     const trimmed = cookieInput.trim()
     if (!trimmed) return
+    let parsed
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      setSaveStatus('invalid-json')
+      return
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      setSaveStatus('invalid-format')
+      return
+    }
     setSaving(true)
     setSaveStatus(null)
     try {
@@ -326,7 +337,7 @@ function LinkedInCookieManager() {
   return (
     <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-text-primary">LinkedIn Session Cookie (li_at)</p>
+        <p className="text-sm font-medium text-text-primary">LinkedIn Session Cookies</p>
         {status?.configured ? (
           <span className="text-xs text-green-accent font-mono">✓ configured ({status.preview})</span>
         ) : (
@@ -334,29 +345,34 @@ function LinkedInCookieManager() {
         )}
       </div>
       <p className="text-xs text-text-muted">
-        This is your LinkedIn session credential — treat it like a password. It is stored only in the
-        backend's local .env file, never committed to git, and only used by the cookie-authenticated
-        scraping mode below.
+        The scraper actor needs your FULL LinkedIn session, not just one cookie. Install the{' '}
+        <strong className="text-text-secondary">Cookie-Editor</strong> browser extension, log into
+        LinkedIn, click the extension icon, choose <strong className="text-text-secondary">Export → Export as JSON</strong>,
+        and paste the entire JSON array below (it will contain li_at, JSESSIONID, and several others —
+        that's expected). A single li_at value alone will be rejected as "invalid cookies". This is
+        stored only in the backend's local .env file, never committed to git.
       </p>
-      <div className="flex gap-2">
-        <input
-          type="password"
+      <div className="space-y-2">
+        <textarea
           value={cookieInput}
           onChange={e => setCookieInput(e.target.value)}
-          placeholder="Paste new li_at cookie value..."
+          placeholder='Paste the full Cookie-Editor JSON export, e.g. [{"name":"li_at","value":"...","domain":".linkedin.com",...}, {"name":"JSESSIONID","value":"...",...}, ...]'
           autoComplete="off"
-          className="flex-1 bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted font-mono focus:outline-none focus:border-purple-primary/50 transition-colors"
+          rows={5}
+          className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-xs text-text-primary placeholder-text-muted font-mono focus:outline-none focus:border-purple-primary/50 transition-colors resize-y"
         />
         <button
           onClick={updateCookie}
           disabled={!cookieInput.trim() || saving}
           className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
         >
-          {saving ? 'Saving...' : 'Update Cookie'}
+          {saving ? 'Saving...' : 'Update Cookies'}
         </button>
       </div>
-      {saveStatus === 'saved' && <p className="text-xs text-green-accent">✓ Cookie updated</p>}
-      {saveStatus === 'error' && <p className="text-xs text-red-accent">Failed to save cookie</p>}
+      {saveStatus === 'saved' && <p className="text-xs text-green-accent">✓ Cookies updated</p>}
+      {saveStatus === 'error' && <p className="text-xs text-red-accent">Failed to save cookies</p>}
+      {saveStatus === 'invalid-json' && <p className="text-xs text-red-accent">Not valid JSON — make sure you pasted the full export, not partial text.</p>}
+      {saveStatus === 'invalid-format' && <p className="text-xs text-red-accent">Must be a JSON array of cookie objects (Cookie-Editor's export format), not a single value.</p>}
     </div>
   )
 }

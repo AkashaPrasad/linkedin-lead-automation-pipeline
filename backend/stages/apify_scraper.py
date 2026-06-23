@@ -1,4 +1,5 @@
 import asyncio
+import json
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from logger import get_logger
@@ -33,19 +34,39 @@ def _build_search_url(query: str, posted_limit: str) -> str:
     return "https://www.linkedin.com/search/results/content/?" + urllib.parse.urlencode(params)
 
 
+def _parse_cookie_export(raw: str) -> list:
+    """The actor's own input schema requires the FULL Cookie-Editor export
+    (a JSON array of LinkedIn's session cookies — li_at, JSESSIONID, etc.),
+    not a single li_at value. A lone li_at is rejected by the actor as
+    "invalid cookies" because LinkedIn needs the whole session, not one cookie."""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        raise RuntimeError(
+            "LINKEDIN_COOKIE is not a valid cookie export. Install the Cookie-Editor "
+            "browser extension, log into LinkedIn, click the extension, export the "
+            "cookies, and paste the FULL JSON array (not just li_at) into the admin panel."
+        )
+    if not isinstance(parsed, list) or not parsed:
+        raise RuntimeError(
+            "LINKEDIN_COOKIE must be the full JSON array exported by Cookie-Editor, "
+            "not a single cookie value."
+        )
+    return parsed
+
+
 def _build_cookie_run_input(cfg: dict, query: str) -> dict:
     scraping = cfg.get("scraping", {})
     posted_limit = scraping.get("posted_limit", "month")
-    cookie_value = get_linkedin_cookie()
-    if not cookie_value:
+    cookie_raw = get_linkedin_cookie()
+    if not cookie_raw:
         raise RuntimeError(
             "scraping.use_cookie_actor is enabled but LINKEDIN_COOKIE is not configured"
         )
+    cookie_array = _parse_cookie_export(cookie_raw)
     return {
         "urls": [_build_search_url(query, posted_limit)],
-        # curious_coder/linkedin-post-search-scraper expects each cookie as a
-        # "name=value" string in the array, not a {name, value, domain} object.
-        "cookie": [f"li_at={cookie_value}"],
+        "cookie": cookie_array,
         "userAgent": _COOKIE_ACTOR_USER_AGENT,
         "proxy": {"useApifyProxy": True},
         "limitPerSource": scraping.get("max_posts_per_query", 50),

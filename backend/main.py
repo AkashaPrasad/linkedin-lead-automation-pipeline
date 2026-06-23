@@ -369,8 +369,11 @@ async def send_test_email(request: Request):
 async def linkedin_cookie_status():
     from config import get_linkedin_cookie
     cookie = get_linkedin_cookie()
-    preview = f"{cookie[:6]}...{cookie[-4:]}" if len(cookie) > 10 else ("set" if cookie else "")
-    return {"configured": bool(cookie), "preview": preview}
+    try:
+        count = len(json.loads(cookie)) if cookie else 0
+    except Exception:
+        count = 0
+    return {"configured": count > 0, "preview": f"{count} cookies" if count else ""}
 
 
 @app.post("/api/linkedin-cookie")
@@ -378,10 +381,16 @@ async def update_linkedin_cookie(request: Request):
     body = await request.json()
     value = (body.get("cookie") or "").strip()
     if not value:
-        raise HTTPException(status_code=400, detail="Cookie value required")
+        raise HTTPException(status_code=400, detail="Cookie export required")
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Not valid JSON — paste the full Cookie-Editor export")
+    if not isinstance(parsed, list) or not parsed:
+        raise HTTPException(status_code=400, detail="Must be a JSON array of cookie objects, not a single value")
     from config import set_linkedin_cookie
     set_linkedin_cookie(value)
-    log.info("LinkedIn cookie updated via admin UI")
+    log.info(f"LinkedIn cookies updated via admin UI ({len(parsed)} cookies)")
     return {"status": "saved"}
 
 
