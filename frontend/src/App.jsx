@@ -141,6 +141,16 @@ export default function App() {
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         break
 
+      case 'stopped':
+        setIsRunning(false)
+        setStages(prev => prev.map(s =>
+          s.status === 'running' ? { ...s, status: 'waiting' } : s
+        ))
+        addLog('WARN', `🛑 ${data.message || 'Pipeline stopped'}`)
+        fetchCheckpoint()
+        if (esRef.current) { esRef.current.close(); esRef.current = null }
+        break
+
       case 'heartbeat':
         break
 
@@ -214,6 +224,23 @@ export default function App() {
     setIsRunning(true)
     _connectSSE()
   }, [_resetUI, _connectSSE, handleSSEEvent])
+
+  const stopPipeline = useCallback(async () => {
+    try {
+      const res = await fetch('/api/pipeline/stop', { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json()
+        setError(body.detail || 'Failed to stop pipeline')
+        return
+      }
+    } catch (e) {
+      setError('Cannot reach the backend API from this deployment.')
+      return
+    }
+    setIsRunning(false)
+    addLog('WARN', '🛑 Stop requested...')
+    if (esRef.current) { esRef.current.close(); esRef.current = null }
+  }, [addLog])
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg-primary">
@@ -316,6 +343,7 @@ export default function App() {
               sheetUrl={sheetUrl}
               onRun={startPipeline}
               onResume={resumePipeline}
+              onStop={stopPipeline}
               onDismissCheckpoint={() => {
                 fetch('/api/pipeline/checkpoint', { method: 'DELETE' }).catch(() => {})
                 setCheckpoint(null)

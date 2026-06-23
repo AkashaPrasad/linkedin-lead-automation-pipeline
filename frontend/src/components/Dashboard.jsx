@@ -111,7 +111,7 @@ function CheckpointBanner({ checkpoint, onResume, onDismiss }) {
 
 export default function Dashboard({
   isRunning, isDryRun, checkpoint, stages, stats, leads, logs,
-  completionData, sheetUrl, onRun, onResume, onDismissCheckpoint,
+  completionData, sheetUrl, onRun, onResume, onStop, onDismissCheckpoint,
   onDismissComplete, onViewHistory,
 }) {
   const showBrevoStats = !!completionData && !isRunning
@@ -149,7 +149,20 @@ export default function Dashboard({
           <h2 className="text-lg font-bold text-text-primary">LinkedIn Lead Pipeline</h2>
           <p className="text-xs text-text-muted mt-0.5">Scrape → Filter → Enrich → Send</p>
         </div>
-        <PipelineRunner isRunning={isRunning} isDryRun={isDryRun} onRun={onRun} />
+        <div className="flex items-center gap-3">
+          <PipelineRunner isRunning={isRunning} isDryRun={isDryRun} onRun={onRun} />
+          {isRunning && (
+            <button
+              onClick={onStop}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-red-accent/10 border border-red-accent/40 text-red-accent hover:bg-red-accent/20 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="5" width="14" height="14" rx="2" />
+              </svg>
+              Stop
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}

@@ -7,7 +7,7 @@ from collections import deque
 from contextlib import asynccontextmanager
 
 import requests as req
-from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 from config import validate_config, GOOGLE_SHEET_ID, service_account_path
 from logger import get_logger
 from pipeline import run_pipeline_async, resume_pipeline_async
+from stages.alerts import send_alert
 import admin_config as admin_cfg
 import checkpoint as cp
 import run_history
@@ -26,6 +27,7 @@ log = get_logger("main")
 _subscribers: list[asyncio.Queue] = []
 _event_history: deque = deque(maxlen=500)
 _is_running = False
+_current_task: asyncio.Task | None = None
 
 
 async def broadcast(event: dict):
@@ -157,8 +159,8 @@ async def pipeline_stream(request: Request):
 
 # ── Pipeline run endpoint ─────────────────────────────────────────────────────
 @app.post("/api/pipeline/run")
-async def run_pipeline(background_tasks: BackgroundTasks):
-    global _is_running
+async def run_pipeline():
+    global _is_running, _current_task
     if _is_running:
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
     missing = validate_config()
@@ -168,13 +170,28 @@ async def run_pipeline(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
     _is_running = True
     _event_history.clear()
-    background_tasks.add_task(_pipeline_wrapper)
+    _current_task = asyncio.create_task(_pipeline_wrapper())
     return {"status": "started"}
 
 
 @app.get("/api/pipeline/status")
 async def pipeline_status():
     return {"is_running": _is_running}
+
+
+@app.post("/api/pipeline/stop")
+async def stop_pipeline():
+    global _is_running, _current_task
+    if not _is_running:
+        raise HTTPException(status_code=400, detail="No pipeline is currently running")
+    if _current_task is not None:
+        _current_task.cancel()
+        _current_task = None
+    _is_running = False
+    await broadcast({"event": "stopped", "message": "Pipeline stopped by user"})
+    await send_alert("🛑 Pipeline stopped manually")
+    log.info("Pipeline stopped manually via /api/pipeline/stop")
+    return {"status": "stopped"}
 
 
 @app.get("/api/pipeline/checkpoint")
@@ -186,8 +203,8 @@ async def get_checkpoint():
 
 
 @app.post("/api/pipeline/resume")
-async def resume_pipeline(background_tasks: BackgroundTasks):
-    global _is_running
+async def resume_pipeline():
+    global _is_running, _current_task
     if _is_running:
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
     if not cp.exists():
@@ -203,7 +220,7 @@ async def resume_pipeline(background_tasks: BackgroundTasks):
     async def _resume_wrapper():
         await _pipeline_run_core(resume_pipeline_async)
 
-    background_tasks.add_task(_resume_wrapper)
+    _current_task = asyncio.create_task(_resume_wrapper())
     return {"status": "resuming"}
 
 

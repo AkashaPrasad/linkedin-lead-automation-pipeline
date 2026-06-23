@@ -43,7 +43,9 @@ def _build_cookie_run_input(cfg: dict, query: str) -> dict:
         )
     return {
         "urls": [_build_search_url(query, posted_limit)],
-        "cookie": [{"name": "li_at", "value": cookie_value, "domain": ".linkedin.com", "path": "/"}],
+        # curious_coder/linkedin-post-search-scraper expects each cookie as a
+        # "name=value" string in the array, not a {name, value, domain} object.
+        "cookie": [f"li_at={cookie_value}"],
         "userAgent": _COOKIE_ACTOR_USER_AGENT,
         "proxy": {"useApifyProxy": True},
         "limitPerSource": scraping.get("max_posts_per_query", 50),
