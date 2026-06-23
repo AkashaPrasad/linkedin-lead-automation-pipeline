@@ -347,6 +347,27 @@ async def send_test_email(request: Request):
     return {"status": "sent", "to": to_email, "subject": subject}
 
 
+# ── LinkedIn cookie endpoints ─────────────────────────────────────────────────
+@app.get("/api/linkedin-cookie/status")
+async def linkedin_cookie_status():
+    from config import get_linkedin_cookie
+    cookie = get_linkedin_cookie()
+    preview = f"{cookie[:6]}...{cookie[-4:]}" if len(cookie) > 10 else ("set" if cookie else "")
+    return {"configured": bool(cookie), "preview": preview}
+
+
+@app.post("/api/linkedin-cookie")
+async def update_linkedin_cookie(request: Request):
+    body = await request.json()
+    value = (body.get("cookie") or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="Cookie value required")
+    from config import set_linkedin_cookie
+    set_linkedin_cookie(value)
+    log.info("LinkedIn cookie updated via admin UI")
+    return {"status": "saved"}
+
+
 # ── Apollo plan check ────────────────────────────────────────────────────────
 @app.get("/api/apollo/plan-check")
 async def apollo_plan_check():

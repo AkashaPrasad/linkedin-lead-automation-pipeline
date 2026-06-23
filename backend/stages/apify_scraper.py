@@ -1,13 +1,55 @@
 import asyncio
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from logger import get_logger
-from config import APIFY_API_TOKEN, APIFY_ACTOR_ID
+from config import APIFY_API_TOKEN, APIFY_ACTOR_ID, APIFY_COOKIE_ACTOR_ID, get_linkedin_cookie
 
 log = get_logger("apify")
 
 
 # "48h" is not a native Apify postedLimit value — we emulate it below via postedLimitDate.
 _VALID_POSTED_LIMITS = {"any", "1h", "24h", "48h", "week", "month", "3months", "6months", "year"}
+
+# curious_coder/linkedin-post-search-scraper requires a userAgent — there's no
+# documented default, so we send a standard desktop Chrome string.
+_COOKIE_ACTOR_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+# Maps our postedLimit values to LinkedIn's own search URL datePosted param
+_DATE_POSTED_MAP = {
+    "24h": "past-24h",
+    "week": "past-week",
+    "month": "past-month",
+}
+
+
+def _build_search_url(query: str, posted_limit: str) -> str:
+    params = {"keywords": query, "origin": "GLOBAL_SEARCH_HEADER"}
+    date_posted = _DATE_POSTED_MAP.get(posted_limit)
+    if date_posted:
+        params["datePosted"] = date_posted
+    return "https://www.linkedin.com/search/results/content/?" + urllib.parse.urlencode(params)
+
+
+def _build_cookie_run_input(cfg: dict, query: str) -> dict:
+    scraping = cfg.get("scraping", {})
+    posted_limit = scraping.get("posted_limit", "month")
+    cookie_value = get_linkedin_cookie()
+    if not cookie_value:
+        raise RuntimeError(
+            "scraping.use_cookie_actor is enabled but LINKEDIN_COOKIE is not configured"
+        )
+    return {
+        "urls": [_build_search_url(query, posted_limit)],
+        "cookie": [{"name": "li_at", "value": cookie_value, "domain": ".linkedin.com", "path": "/"}],
+        "userAgent": _COOKIE_ACTOR_USER_AGENT,
+        "proxy": {"useApifyProxy": True},
+        "limitPerSource": scraping.get("max_posts_per_query", 50),
+        "deepScrape": False,
+    }
+
 
 def _build_run_input(cfg: dict, query: str) -> dict:
     scraping = cfg.get("scraping", {})
@@ -32,10 +74,10 @@ def _build_run_input(cfg: dict, query: str) -> dict:
     return run_input
 
 
-def _run_apify_sync(run_input: dict) -> list[dict]:
+def _run_apify_sync(run_input: dict, actor_id: str) -> list[dict]:
     from apify_client import ApifyClient
     client = ApifyClient(APIFY_API_TOKEN)
-    actor_client = client.actor(APIFY_ACTOR_ID)
+    actor_client = client.actor(actor_id)
     run = actor_client.call(run_input=run_input, timeout_secs=600)
     dataset_client = client.dataset(run["defaultDatasetId"])
     return dataset_client.list_items().items
@@ -44,8 +86,13 @@ def _run_apify_sync(run_input: dict) -> list[dict]:
 def _run_apify_for_query_sync(cfg: dict, query: str) -> list[dict]:
     """Runs the actor for a single search query and tags each result with the query
     that produced it, so the sheet can show which keywords are converting best."""
-    run_input = _build_run_input(cfg, query)
-    posts = _run_apify_sync(run_input)
+    use_cookies = cfg.get("scraping", {}).get("use_cookie_actor", False)
+    if use_cookies:
+        run_input = _build_cookie_run_input(cfg, query)
+        posts = _run_apify_sync(run_input, APIFY_COOKIE_ACTOR_ID)
+    else:
+        run_input = _build_run_input(cfg, query)
+        posts = _run_apify_sync(run_input, APIFY_ACTOR_ID)
     for p in posts:
         p["_search_query"] = query
     return posts
@@ -60,10 +107,19 @@ async def run_apify(emit, cfg: dict | None = None) -> list[dict]:
     queries = scraping.get("search_queries") or ["marketing agency"]
     total_cap = scraping.get("total_post_cap", 500)
     min_len = cfg.get("filtering", {}).get("min_post_length", 50)
+    use_cookies = scraping.get("use_cookie_actor", False)
 
+    if use_cookies and not get_linkedin_cookie():
+        raise RuntimeError(
+            "scraping.use_cookie_actor is enabled but no LinkedIn cookie is configured — "
+            "set it in the admin panel first"
+        )
+
+    mode = "cookie-authenticated" if use_cookies else "no-cookie"
     await emit({"event": "stage_start", "stage": 1, "name": "Apify Scraper",
-                "message": f"Scraping LinkedIn with {len(queries)} keywords..."})
+                "message": f"Scraping LinkedIn with {len(queries)} keywords ({mode} mode)..."})
     await emit({"event": "progress", "stage": 1, "message": "Apify runs started, waiting for completion..."})
+    log.info(f"STAGE 1 | Scraping mode: {mode}")
 
     # Run one Apify call per query (sequentially, on worker threads) so we can tag
     # each post with the exact search query that found it — needed to see which

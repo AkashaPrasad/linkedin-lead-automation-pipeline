@@ -31,6 +31,10 @@ DEFAULT_CONFIG = {
         "author_industry_ids": [],
         "author_geo_ids": [],
         "min_post_length": 50,
+        # When True, Stage 1 uses the cookie-authenticated Apify actor
+        # (APIFY_COOKIE_ACTOR_ID) with the LinkedIn session cookie from
+        # LINKEDIN_COOKIE instead of the default cookie-less actor.
+        "use_cookie_actor": False,
     },
     "filtering": {
         "gpt_filter_enabled": True,

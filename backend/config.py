@@ -6,6 +6,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
 APIFY_ACTOR_ID = os.getenv("APIFY_ACTOR_ID", "harvestapi~linkedin-post-search")
+APIFY_COOKIE_ACTOR_ID = os.getenv("APIFY_COOKIE_ACTOR_ID", "curious_coder/linkedin-post-search-scraper")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -51,6 +52,31 @@ def has_openai() -> bool:
 
 def has_gemini() -> bool:
     return not _is_placeholder(GEMINI_API_KEY)
+
+_ENV_FILE = Path(__file__).parent.parent / ".env"
+
+
+def get_linkedin_cookie() -> str:
+    """Reads live from the environment (not a cached module constant) so a
+    UI-driven update takes effect on the next pipeline run without a restart."""
+    return os.getenv("LINKEDIN_COOKIE", "")
+
+
+def set_linkedin_cookie(value: str) -> None:
+    """Updates the cookie for the running process and persists it to .env
+    (gitignored) so it survives a restart."""
+    os.environ["LINKEDIN_COOKIE"] = value
+    lines = _ENV_FILE.read_text().splitlines() if _ENV_FILE.exists() else []
+    found = False
+    for i, line in enumerate(lines):
+        if line.startswith("LINKEDIN_COOKIE="):
+            lines[i] = f"LINKEDIN_COOKIE={value}"
+            found = True
+            break
+    if not found:
+        lines.append(f"LINKEDIN_COOKIE={value}")
+    _ENV_FILE.write_text("\n".join(lines) + "\n")
+
 
 def service_account_path() -> Path:
     # On Railway/cloud, the JSON is injected as an env var to avoid committing secrets

@@ -285,6 +285,82 @@ function QuerySetManager({ s, setMany }) {
   )
 }
 
+// ── LinkedIn cookie manager ─────────────────────────────────────────────────────
+function LinkedInCookieManager() {
+  const [status, setStatus] = useState(null)
+  const [cookieInput, setCookieInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState(null)
+
+  const loadStatus = () => {
+    fetch('/api/linkedin-cookie/status')
+      .then(r => r.json())
+      .then(setStatus)
+      .catch(() => {})
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  const updateCookie = async () => {
+    const trimmed = cookieInput.trim()
+    if (!trimmed) return
+    setSaving(true)
+    setSaveStatus(null)
+    try {
+      const res = await fetch('/api/linkedin-cookie', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie: trimmed }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      setCookieInput('')
+      setSaveStatus('saved')
+      loadStatus()
+      setTimeout(() => setSaveStatus(null), 3000)
+    } catch (e) {
+      setSaveStatus('error')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-text-primary">LinkedIn Session Cookie (li_at)</p>
+        {status?.configured ? (
+          <span className="text-xs text-green-accent font-mono">✓ configured ({status.preview})</span>
+        ) : (
+          <span className="text-xs text-amber-accent">not configured</span>
+        )}
+      </div>
+      <p className="text-xs text-text-muted">
+        This is your LinkedIn session credential — treat it like a password. It is stored only in the
+        backend's local .env file, never committed to git, and only used by the cookie-authenticated
+        scraping mode below.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={cookieInput}
+          onChange={e => setCookieInput(e.target.value)}
+          placeholder="Paste new li_at cookie value..."
+          autoComplete="off"
+          className="flex-1 bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted font-mono focus:outline-none focus:border-purple-primary/50 transition-colors"
+        />
+        <button
+          onClick={updateCookie}
+          disabled={!cookieInput.trim() || saving}
+          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          {saving ? 'Saving...' : 'Update Cookie'}
+        </button>
+      </div>
+      {saveStatus === 'saved' && <p className="text-xs text-green-accent">✓ Cookie updated</p>}
+      {saveStatus === 'error' && <p className="text-xs text-red-accent">Failed to save cookie</p>}
+    </div>
+  )
+}
+
 // ── Tab panels ────────────────────────────────────────────────────────────────
 
 function ScrapingTab({ cfg, onChange }) {
@@ -368,6 +444,17 @@ function ScrapingTab({ cfg, onChange }) {
             />
           </Field>
         </div>
+      </div>
+
+      <div className="space-y-4">
+        <SectionLabel>Cookie-Authenticated Scraping</SectionLabel>
+        <Toggle
+          value={s.use_cookie_actor ?? false}
+          onChange={v => set('use_cookie_actor', v)}
+          label="Scrape with LinkedIn cookie"
+          hint="Off: uses the default actor (no login, broader but noisier results). On: uses an authenticated actor with your LinkedIn session cookie below — required before enabling this."
+        />
+        <LinkedInCookieManager />
       </div>
 
       <div className="grid grid-cols-2 gap-6">
