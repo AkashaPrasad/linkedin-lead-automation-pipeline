@@ -166,14 +166,21 @@ async def run_pipeline_async(emit):
                 lambda: sh.add_worksheet(title="Master", rows=2000, cols=20)
             )
 
-        # ── Stage 2: Deduplication ─────────────────────────────────────
-        new_posts = await run_deduplication(posts, master_ws_tmp, emit)
+        # ── Stage 2: Deduplication + India Location Filter ──────────────
+        new_posts, india_stats = await run_deduplication(posts, master_ws_tmp, emit)
+        india_rejected = india_stats["rejected_no_india"] + india_stats["rejected_agency"]
+        india_pass_rate = round(100 * india_stats["passed"] / india_stats["total"], 1) if india_stats["total"] else 0.0
+        await send_alert(
+            f"✅ Stage 2 done — {len(new_posts)} new leads, "
+            f"India filter: {india_stats['passed']} passed / {india_rejected} rejected "
+            f"({india_pass_rate}% pass rate)"
+        )
 
         if not new_posts:
             await emit({"event": "complete", "scraped": stats["scraped"], "real": 0,
                         "with_email": 0, "sent": 0, "failed": 0, "no_email": 0,
                         "duration_min": round((time.time() - pipeline_start) / 60, 1)})
-            await send_alert("✅ Pipeline complete — 0 new leads (all duplicates)")
+            await send_alert("✅ Pipeline complete — 0 new leads after dedup/India filter")
             return
 
         # ── Stage 3: GPT Filter ────────────────────────────────────────

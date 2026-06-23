@@ -1,21 +1,21 @@
 {
   "scraping": {
     "search_queries": [
-      "\"looking for recommendations\" marketing",
-      "\"can anyone recommend\" agency",
-      "\"anyone worked with\" marketing agency",
+      "\"shortlisting\" agency India",
+      "\"evaluating agencies\" India",
+      "\"hiring an agency\" India",
+      "\"onboarding an agency\" India",
+      "\"DM me\" marketing agency India",
+      "\"looking for recommendations\" agency India",
+      "\"we are looking for\" marketing India",
+      "\"can anyone recommend\" agency India",
       "\"shortlisting\" marketing agency",
-      "\"evaluating agencies\"",
-      "\"need help with our brand\"",
-      "\"our brand needs\" marketing",
-      "\"looking for a partner\" D2C marketing",
-      "\"open to connect\" marketing agency",
-      "\"DM me\" marketing agency",
-      "\"we are looking for\" performance marketing",
-      "\"hiring an agency\"",
-      "\"onboarding an agency\"",
-      "\"anyone suggest\" digital marketing",
-      "\"our startup needs\" marketing"
+      "\"evaluating\" performance marketing agency",
+      "\"anyone worked with\" marketing agency India",
+      "\"switching agencies\" India",
+      "\"need a marketing agency\" India",
+      "\"evaluating\" branding agency India",
+      "\"looking for\" social media agency India"
     ],
     "query_sets": {
       "search-1": [
@@ -85,9 +85,26 @@
         "\"DM me\" production house",
         "\"looking for\" social media agency NOT (hiring OR intern)",
         "\"evaluating\" social media partner"
+      ],
+      "test-5": [
+        "\"shortlisting\" agency India",
+        "\"evaluating agencies\" India",
+        "\"hiring an agency\" India",
+        "\"onboarding an agency\" India",
+        "\"DM me\" marketing agency India",
+        "\"looking for recommendations\" agency India",
+        "\"we are looking for\" marketing India",
+        "\"can anyone recommend\" agency India",
+        "\"shortlisting\" marketing agency",
+        "\"evaluating\" performance marketing agency",
+        "\"anyone worked with\" marketing agency India",
+        "\"switching agencies\" India",
+        "\"need a marketing agency\" India",
+        "\"evaluating\" branding agency India",
+        "\"looking for\" social media agency India"
       ]
     },
-    "active_query_set": "search-1",
+    "active_query_set": "test-5",
     "max_posts_per_query": 150,
     "total_post_cap": 1000,
     "posted_limit": "week",
