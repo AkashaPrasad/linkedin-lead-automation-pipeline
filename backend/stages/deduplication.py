@@ -52,8 +52,18 @@ def _india_filter_one(post: dict) -> tuple[bool, str]:
     return True, "passed"
 
 
-def _apply_india_filter(posts: list[dict]) -> tuple[list[dict], dict]:
+_REASON_LABELS = {
+    "no India signal": "No India Signal",
+    "agency author": "Agency Author",
+}
+
+
+def _apply_india_filter(posts: list[dict]) -> tuple[list[dict], list[dict], dict]:
+    """Returns (passed, rejected, stats). Rejected posts are NOT dropped — they're
+    tagged with _lead_status so they still show up in the sheet as skipped,
+    instead of disappearing before anyone can see why."""
     passed = []
+    rejected = []
     reasons = {"no India signal": 0, "agency author": 0}
     for post in posts:
         ok, reason = _india_filter_one(post)
@@ -61,13 +71,16 @@ def _apply_india_filter(posts: list[dict]) -> tuple[list[dict], dict]:
             passed.append(post)
         else:
             reasons[reason] += 1
+            post["_lead_status"] = f"SKIPPED: India Filter - {_REASON_LABELS[reason]}"
+            post["_filter_reason"] = reason
+            rejected.append(post)
     stats = {
         "total": len(posts),
         "passed": len(passed),
         "rejected_no_india": reasons["no India signal"],
         "rejected_agency": reasons["agency author"],
     }
-    return passed, stats
+    return passed, rejected, stats
 
 
 def _get_seen_urls_sync(worksheet) -> set:
@@ -99,7 +112,7 @@ def _get_seen_urls_sync(worksheet) -> set:
         return set()
 
 
-async def run_deduplication(posts: list[dict], master_ws, emit) -> tuple[list[dict], dict]:
+async def run_deduplication(posts: list[dict], master_ws, emit) -> tuple[list[dict], list[dict], dict]:
     await emit({"event": "stage_start", "stage": 2, "name": "Deduplication",
                 "message": "Checking for duplicate LinkedIn profiles (ignoring dry-run entries)..."})
 
@@ -121,7 +134,7 @@ async def run_deduplication(posts: list[dict], master_ws, emit) -> tuple[list[di
     await emit({"event": "progress", "stage": 2,
                 "message": f"Applying India location filter to {len(new_posts)} deduplicated posts..."})
 
-    india_filtered, india_stats = _apply_india_filter(new_posts)
+    india_passed, india_rejected, india_stats = _apply_india_filter(new_posts)
     pass_rate = round(100 * india_stats["passed"] / india_stats["total"], 1) if india_stats["total"] else 0.0
 
     await emit({
@@ -131,7 +144,7 @@ async def run_deduplication(posts: list[dict], master_ws, emit) -> tuple[list[di
         "metric": (
             f"{len(new_posts)} new leads ({duplicates} duplicates removed) — "
             f"India filter: {india_stats['passed']} passed, "
-            f"{india_stats['rejected_no_india'] + india_stats['rejected_agency']} rejected "
+            f"{india_stats['rejected_no_india'] + india_stats['rejected_agency']} logged as skipped "
             f"({pass_rate}% pass rate)"
         ),
         "duplicates_removed": duplicates,
@@ -140,8 +153,8 @@ async def run_deduplication(posts: list[dict], master_ws, emit) -> tuple[list[di
     })
     log.info(
         f"STAGE 2 | Dedup: {duplicates} removed, {len(new_posts)} new | "
-        f"India filter: {india_stats['passed']}/{india_stats['total']} passed "
+        f"India filter: {india_stats['passed']}/{india_stats['total']} passed, rest logged as skipped "
         f"({india_stats['rejected_no_india']} no India signal, "
         f"{india_stats['rejected_agency']} agency author)"
     )
-    return india_filtered, india_stats
+    return india_passed, india_rejected, india_stats

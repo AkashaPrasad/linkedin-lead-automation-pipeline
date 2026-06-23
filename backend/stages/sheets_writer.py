@@ -44,12 +44,16 @@ def _ensure_worksheet_sync(sh, tab_name: str):
 
 
 def _ensure_headers_sync(ws) -> int:
-    """Ensure header row exists. Returns number of existing rows (including header)."""
+    """Ensure header row exists and is up to date. Returns number of existing
+    rows (including header). Data rows are always written in HEADERS column
+    order regardless of what the sheet's header row says, so if the header
+    row is missing a newer column (e.g. a sheet created before "Contact
+    Method" existed), we refresh row 1 in place — this only rewrites the
+    label text, never touches any data row."""
     try:
         all_vals = ws.get_all_values()
     except Exception:
         all_vals = []
-    # Guard against empty rows (new sheets can return [[]] instead of [])
     first_cell = all_vals[0][0] if (all_vals and all_vals[0]) else ""
     if not first_cell or first_cell != HEADERS[0]:
         # Clear any blank rows first, then insert headers
@@ -60,6 +64,8 @@ def _ensure_headers_sync(ws) -> int:
             pass
         ws.insert_row(HEADERS, 1)
         return 1
+    if all_vals[0] != HEADERS:
+        ws.update("A1", [HEADERS])
     return len(all_vals)
 
 

@@ -167,28 +167,30 @@ async def run_pipeline_async(emit):
             )
 
         # ── Stage 2: Deduplication + India Location Filter ──────────────
-        new_posts, india_stats = await run_deduplication(posts, master_ws_tmp, emit)
-        india_rejected = india_stats["rejected_no_india"] + india_stats["rejected_agency"]
+        # India-rejected posts are NOT dropped — they're tagged as skipped and
+        # carried into skipped_posts below so they still land in the sheet.
+        india_passed, india_rejected, india_stats = await run_deduplication(posts, master_ws_tmp, emit)
+        india_rejected_count = india_stats["rejected_no_india"] + india_stats["rejected_agency"]
         india_pass_rate = round(100 * india_stats["passed"] / india_stats["total"], 1) if india_stats["total"] else 0.0
         await send_alert(
-            f"✅ Stage 2 done — {len(new_posts)} new leads, "
-            f"India filter: {india_stats['passed']} passed / {india_rejected} rejected "
+            f"✅ Stage 2 done — {india_stats['total']} new leads, "
+            f"India filter: {india_stats['passed']} passed / {india_rejected_count} logged as skipped "
             f"({india_pass_rate}% pass rate)"
         )
 
-        if not new_posts:
+        if india_stats["total"] == 0:
             await emit({"event": "complete", "scraped": stats["scraped"], "real": 0,
                         "with_email": 0, "sent": 0, "failed": 0, "no_email": 0,
                         "duration_min": round((time.time() - pipeline_start) / 60, 1)})
-            await send_alert("✅ Pipeline complete — 0 new leads after dedup/India filter")
+            await send_alert("✅ Pipeline complete — 0 new leads (all duplicates)")
             return
 
         # ── Stage 3: GPT Filter ────────────────────────────────────────
         gpt_enabled = filtering.get("gpt_filter_enabled", True)
         if gpt_enabled:
-            real_posts, skipped_posts = await run_gpt_filter(new_posts, emit)
+            real_posts, skipped_posts = await run_gpt_filter(india_passed, emit)
         else:
-            real_posts = new_posts
+            real_posts = india_passed
             skipped_posts = []
             for p in real_posts:
                 p["_lead_status"] = "REAL"
@@ -196,6 +198,8 @@ async def run_pipeline_async(emit):
                         "message": "GPT filter disabled — passing all posts"})
             await emit({"event": "stage_complete", "stage": 3, "name": "GPT Filter",
                         "metric": f"Skipped (disabled) — {len(real_posts)} passed"})
+
+        skipped_posts = skipped_posts + india_rejected
 
         if filtering.get("only_posts_with_email"):
             real_posts = [p for p in real_posts if p.get("_email_in_post")]
