@@ -1,7 +1,7 @@
 import json
-from pathlib import Path
+from config import persistent_data_path
 
-CONFIG_FILE = Path(__file__).parent.parent / "admin_config.json"
+CONFIG_FILE = persistent_data_path("admin_config.json")
 
 _DEFAULT_QUERIES = [
     "marketing agency",

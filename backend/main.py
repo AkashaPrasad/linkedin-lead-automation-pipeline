@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from config import validate_config, GOOGLE_SHEET_ID, service_account_path
+from config import validate_config, GOOGLE_SHEET_ID, service_account_path, persistent_data_path
 from logger import get_logger
 from pipeline import run_pipeline_async, resume_pipeline_async
 from stages.alerts import send_alert
@@ -319,7 +319,7 @@ async def get_next_runs():
 
 
 # ── Templates endpoints ───────────────────────────────────────────────────────
-TEMPLATES_FILE = Path(__file__).parent.parent / "templates.json"
+TEMPLATES_FILE = persistent_data_path("templates.json")
 
 
 def _default_templates() -> dict:

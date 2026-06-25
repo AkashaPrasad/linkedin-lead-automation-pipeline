@@ -87,3 +87,35 @@ def service_account_path() -> Path:
             tmp.write_text(sa_json)
         return tmp
     return Path(__file__).parent / GOOGLE_SERVICE_ACCOUNT_FILE
+
+
+def persistent_data_path(filename: str) -> Path:
+    """Path for a user-editable data file (admin_config.json, templates.json)
+    that must survive redeploys.
+
+    Without this, these files are baked into the Docker image from git at
+    build time — every redeploy starts a fresh container from that image,
+    silently discarding anything saved through the UI since the last commit
+    (new query sets, scraping settings, template edits, etc).
+
+    If CONFIG_DIR is set (a Railway Volume — or equivalent persistent disk
+    on another host — mounted at that path), the file lives there instead
+    and is seeded once from the repo's bundled version on first boot. After
+    that, redeploys never touch it again — only an explicit git change to
+    the bundled file affects it, and only for brand-new deployments that
+    haven't seeded yet.
+
+    Without CONFIG_DIR (e.g. local dev), falls back to the repo root so
+    local behavior is unchanged.
+    """
+    config_dir = os.getenv("CONFIG_DIR", "")
+    if not config_dir:
+        return Path(__file__).parent.parent / filename
+    persistent_path = Path(config_dir) / filename
+    if not persistent_path.exists():
+        bundled = Path(__file__).parent.parent / filename
+        persistent_path.parent.mkdir(parents=True, exist_ok=True)
+        if bundled.exists():
+            import shutil
+            shutil.copy(bundled, persistent_path)
+    return persistent_path
