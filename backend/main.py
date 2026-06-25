@@ -330,6 +330,7 @@ def _default_templates() -> dict:
         "Production": {"subject": "", "body": ""},
         "Influencer Marketing": {"subject": "", "body": ""},
         "Branding": {"subject": "", "body": ""},
+        "Creative": {"subject": "", "body": ""},
         "Creative - FMCG": {"subject": "", "body": ""},
         "Creative - Real Estate": {"subject": "", "body": ""},
         "Creative - Apparel": {"subject": "", "body": ""},

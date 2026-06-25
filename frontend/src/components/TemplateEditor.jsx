@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 const SERVICE_CATEGORIES = ['Growth', 'Production', 'Influencer Marketing', 'Branding']
+// "Creative" (main) is the parent fallback — used when the AI knows the lead is a
+// creative-type ask but the brand's industry doesn't fit any of the 5 sub-categories.
+const CREATIVE_MAIN = 'Creative'
 const CREATIVE_SUBCATEGORIES = ['Creative - FMCG', 'Creative - Real Estate', 'Creative - Apparel', 'Creative - Kids', 'Creative - Beauty']
-const CATEGORIES = [...SERVICE_CATEGORIES, ...CREATIVE_SUBCATEGORIES, 'Generic']
+const CATEGORIES = [...SERVICE_CATEGORIES, CREATIVE_MAIN, ...CREATIVE_SUBCATEGORIES, 'Generic']
 
 const CATEGORY_COLORS = {
   'Growth': 'text-green-accent border-green-accent/30 bg-green-accent/5',
   'Production': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
   'Influencer Marketing': 'text-orange-400 border-orange-400/30 bg-orange-400/5',
   'Branding': 'text-amber-accent border-amber-accent/30 bg-amber-accent/5',
+  'Creative': 'text-purple-light border-purple-primary/40 bg-purple-primary/10',
   'Creative - FMCG': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
   'Creative - Real Estate': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
   'Creative - Apparel': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
@@ -515,6 +519,21 @@ export default function TemplateEditor() {
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs text-text-muted font-semibold uppercase tracking-wide pr-1">Creative:</span>
+          <button
+            onClick={() => setActiveCategory(CREATIVE_MAIN)}
+            title="Fallback used when the AI knows it's a creative-type ask but the industry doesn't fit any sub-category below"
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
+              activeCategory === CREATIVE_MAIN
+                ? CATEGORY_COLORS[CREATIVE_MAIN]
+                : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
+            }`}
+          >
+            Main
+            {JSON.stringify(templates[CREATIVE_MAIN]) !== JSON.stringify(saved[CREATIVE_MAIN]) && (
+              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
+            )}
+          </button>
+          <span className="w-px h-5 bg-border-color" />
           {CREATIVE_SUBCATEGORIES.map(cat => (
             <button
               key={cat}

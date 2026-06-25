@@ -11,7 +11,7 @@ _gemini_model = None
 
 USER_TEMPLATE = """You are analyzing a LinkedIn post for Decision Pinnacle — a full-service creative and digital marketing agency in India.
 
-Decision Pinnacle classifies every qualified lead into exactly ONE of 10 SERVICE CATEGORIES based on WHAT SERVICE the lead is asking for — not the brand's industry — EXCEPT for "Creative", which additionally requires identifying the brand's industry vertical (see below).
+Decision Pinnacle classifies every qualified lead into exactly ONE of 11 SERVICE CATEGORIES based on WHAT SERVICE the lead is asking for — not the brand's industry — EXCEPT for "Creative", which additionally tries to identify the brand's industry vertical (see below).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SERVICE CATEGORIES
@@ -37,20 +37,17 @@ SERVICE CATEGORIES
    - "Kids" — baby/children's products of ANY type — ALWAYS outranks Apparel or Beauty when the product is explicitly for infants/children.
    - "Beauty" — cosmetics, skincare, haircare, makeup, fragrance, grooming (adult, non-baby).
    If the industry fits one of these 5 → output category as "Creative - <Vertical>" exactly, e.g. "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel", "Creative - Kids", "Creative - Beauty".
-   If the industry does NOT fit any of these 5 (e.g. SaaS, fintech, healthcare, education, automotive, B2B services) → output category as "Generic" instead. Do not invent a 6th vertical, and do not output bare "Creative" without a vertical.
+   If the industry does NOT fit any of these 5 (e.g. SaaS, fintech, healthcare, education, automotive, B2B services), or genuinely cannot be determined → output bare "Creative" instead (the main/parent category — NOT "Generic"). This keeps the lead correctly flagged as a creative-type ask even without an industry-specific angle.
 
-6. "Generic" — use this when:
-   - The post doesn't clearly fit Growth, Production, Influencer Marketing, or Branding, AND it's not a Creative-type ask either, OR
-   - It IS a Creative-type ask but the brand's industry doesn't fit FMCG/Real Estate/Apparel/Kids/Beauty, OR
-   - The service type genuinely cannot be determined from the post or author context. Never guess wildly.
+6. "Generic" — use this ONLY when the post doesn't clearly fit Growth, Production, Influencer Marketing, Branding, OR Creative at all — i.e. the service type itself genuinely cannot be determined from the post or author context. Never guess wildly. Generic is now the last resort, not a catch-all for Creative leads with an unclear industry — those go to bare "Creative" (see above).
 
 TIEBREAKERS (apply in this order — never skip these):
 - A request specifically for a "production house" / "video production agency" is "Production" even if it's for a creative campaign — production is the literal deliverable being asked for.
 - A request for a general "social media agency" or "creative agency" (no specific production/influencer/branding emphasis) is "Creative", not "Branding".
 - A request explicitly emphasizing brand identity/logo/brand book/naming is "Branding", even if it also mentions general creative work.
 - If a post asks for MULTIPLE services with no clear primary, prefer in this order: Branding > Production > Influencer Marketing > Growth > Creative (the more specific/concrete ask wins over the broader "Creative" catch-all).
-- Within "Creative" only: baby/kids product → ALWAYS "Creative - Kids", even if also apparel or FMCG. Cosmetic/skincare/makeup → "Creative - Beauty" even if sold via FMCG-style D2C channels. Plain hygiene/cleaning staple with no beauty positioning → "Creative - FMCG".
-- Cannot tell the service type or (for Creative) the industry → "Generic". Never guess wildly.
+- Within "Creative" only: baby/kids product → ALWAYS "Creative - Kids", even if also apparel or FMCG. Cosmetic/skincare/makeup → "Creative - Beauty" even if sold via FMCG-style D2C channels. Plain hygiene/cleaning staple with no beauty positioning → "Creative - FMCG". Industry doesn't fit any of the 5, or can't be determined → bare "Creative".
+- Cannot tell the service type AT ALL (not even Creative) → "Generic". Never guess wildly.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Extract FOUR things from the post below:
@@ -65,7 +62,7 @@ Extract FOUR things from the post below:
    - If not in the post, infer it from the AUTHOR HEADLINE (e.g. "Founder at Sleepyhead" → "Sleepyhead", "Marketing Lead, XYZ Pvt Ltd" → "XYZ Pvt Ltd").
    - If genuinely no company name is identifiable from either source, return null. Do not invent a name.
 
-3. CATEGORY: Pick exactly ONE of: "Growth", "Production", "Influencer Marketing", "Branding", "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel", "Creative - Kids", "Creative - Beauty", "Generic" using the definitions and tiebreakers above.
+3. CATEGORY: Pick exactly ONE of: "Growth", "Production", "Influencer Marketing", "Branding", "Creative", "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel", "Creative - Kids", "Creative - Beauty", "Generic" using the definitions and tiebreakers above.
 
 4. CONTACT METHOD: How does the post tell people to reach out? Pick exactly ONE, in this priority order (check Email first, then Phone, then DM — use the highest-priority one that's actually present):
    - "Email" — an email address is given anywhere in the post (e.g. "email me at x@y.com", "send your portfolio to x@y.com").
@@ -83,7 +80,7 @@ Return ONLY this exact JSON (no markdown, no explanation):
 {{"email_in_post": "email@example.com or null", "company_name": "Company Name or null", "category": "Growth", "contact_method": "Email"}}"""
 
 VALID_CATEGORIES = {
-    "Growth", "Production", "Influencer Marketing", "Branding",
+    "Growth", "Production", "Influencer Marketing", "Branding", "Creative",
     "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel",
     "Creative - Kids", "Creative - Beauty", "Generic",
 }

@@ -3,6 +3,7 @@ const CATEGORY_COLORS = {
   'Production': 'bg-blue-400/10 text-blue-400 border-blue-400/20',
   'Influencer Marketing': 'bg-orange-400/10 text-orange-400 border-orange-400/20',
   'Branding': 'bg-amber-accent/10 text-amber-accent border-amber-accent/20',
+  'Creative': 'bg-purple-primary/15 text-purple-light border-purple-primary/30',
   'Creative - FMCG': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
   'Creative - Real Estate': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
   'Creative - Apparel': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
