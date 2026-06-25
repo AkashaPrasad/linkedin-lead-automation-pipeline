@@ -1,9 +1,156 @@
+import { useState, useEffect } from 'react'
 import StatsBar from './StatsBar'
 import StageProgress from './StageProgress'
 import LeadTable from './LeadTable'
 import LogConsole from './LogConsole'
 import PipelineRunner from './PipelineRunner'
 import BrevoStatsPanel from './BrevoStatsPanel'
+
+// ── Promote dry run to real send ───────────────────────────────────────────────
+function PromoteDryRunModal({ onClose, onPromote }) {
+  const [tabs, setTabs] = useState([])
+  const [selectedTab, setSelectedTab] = useState('')
+  const [loadingTabs, setLoadingTabs] = useState(true)
+  const [preview, setPreview] = useState(null)
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState(null)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/pipeline/promote/tabs')
+      .then(r => r.json())
+      .then(d => {
+        const found = d.tabs || []
+        setTabs(found)
+        if (found.length) setSelectedTab(found[0])
+        setLoadingTabs(false)
+      })
+      .catch(() => setLoadingTabs(false))
+  }, [])
+
+  const checkTab = async () => {
+    if (!selectedTab) return
+    setChecking(true)
+    setError(null)
+    setPreview(null)
+    try {
+      const res = await fetch(`/api/pipeline/promote/preview?tab=${encodeURIComponent(selectedTab)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Could not read tab')
+      setPreview(data)
+    } catch (e) {
+      setError(e.message)
+    }
+    setChecking(false)
+  }
+
+  const send = async () => {
+    setSending(true)
+    setError(null)
+    const ok = await onPromote(selectedTab)
+    setSending(false)
+    if (ok) onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-bg-secondary border border-border-color rounded-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-color">
+          <div>
+            <h3 className="text-base font-bold text-text-primary">Promote Dry Run to Real Send</h3>
+            <p className="text-xs text-text-muted mt-0.5">Sends the exact leads already in a dry-run tab — no re-scraping</p>
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs text-text-muted font-medium uppercase tracking-wide block mb-1.5">
+              Dry-run tab
+            </label>
+            {loadingTabs ? (
+              <p className="text-xs text-text-muted">Loading tabs...</p>
+            ) : tabs.length === 0 ? (
+              <p className="text-xs text-amber-accent">No "[DRY]" tabs found in the sheet.</p>
+            ) : (
+              <select
+                value={selectedTab}
+                onChange={e => { setSelectedTab(e.target.value); setPreview(null) }}
+                className="w-full bg-bg-primary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
+              >
+                {tabs.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+          </div>
+
+          {tabs.length > 0 && (
+            <button
+              onClick={checkTab}
+              disabled={checking || !selectedTab}
+              className="px-4 py-2 rounded-lg border border-border-color text-text-secondary text-sm hover:text-text-primary hover:border-purple-primary/30 transition-colors disabled:opacity-40"
+            >
+              {checking ? 'Checking...' : 'Check this tab'}
+            </button>
+          )}
+
+          {preview && (
+            <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Promotable leads</span>
+                <span className="font-semibold text-text-primary">{preview.promotable}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Already have an email</span>
+                <span className="text-green-accent">{preview.already_have_email}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Need Apollo enrichment</span>
+                <span className="text-amber-accent">{preview.need_apollo}</span>
+              </div>
+              {preview.promotable === 0 && (
+                <p className="text-xs text-text-muted pt-1">Nothing eligible — either already promoted, or no REAL leads in this tab.</p>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-start gap-2 p-3 bg-red-accent/10 border border-red-accent/30 rounded-lg">
+              <span className="text-red-accent mt-0.5">⚠</span>
+              <p className="text-sm text-red-accent">{error}</p>
+            </div>
+          )}
+
+          {preview && preview.promotable > 0 && (
+            <p className="text-xs text-amber-accent/90">
+              This will send {preview.promotable} real emails via Brevo and write them into Master. Cannot be undone.
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-color">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-border-color text-text-secondary text-sm hover:text-text-primary transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={send}
+            disabled={!preview || preview.promotable === 0 || sending}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+              preview && preview.promotable > 0 && !sending
+                ? 'bg-purple-primary text-white hover:bg-purple-primary/90'
+                : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
+            }`}
+          >
+            {sending ? 'Starting...' : preview ? `Send All ${preview.promotable} Leads` : 'Check tab first'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function CompletionModal({ data, sheetUrl, onDismiss, onViewHistory }) {
   if (!data) return null
@@ -111,10 +258,11 @@ function CheckpointBanner({ checkpoint, onResume, onDismiss }) {
 
 export default function Dashboard({
   isRunning, isDryRun, checkpoint, stages, stats, leads, logs,
-  completionData, sheetUrl, onRun, onResume, onStop, onDismissCheckpoint,
+  completionData, sheetUrl, onRun, onResume, onStop, onPromote, onDismissCheckpoint,
   onDismissComplete, onViewHistory,
 }) {
   const showBrevoStats = !!completionData && !isRunning
+  const [showPromoteModal, setShowPromoteModal] = useState(false)
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-6 gap-4">
@@ -150,6 +298,17 @@ export default function Dashboard({
           <p className="text-xs text-text-muted mt-0.5">Scrape → Filter → Enrich → Send</p>
         </div>
         <div className="flex items-center gap-3">
+          {!isRunning && (
+            <button
+              onClick={() => setShowPromoteModal(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-bg-tertiary border border-border-color text-text-secondary hover:text-text-primary hover:border-purple-primary/30 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+              Promote Dry Run
+            </button>
+          )}
           <PipelineRunner isRunning={isRunning} isDryRun={isDryRun} onRun={onRun} />
           {isRunning && (
             <button
@@ -210,6 +369,14 @@ export default function Dashboard({
         onDismiss={onDismissComplete}
         onViewHistory={onViewHistory}
       />
+
+      {/* Promote dry run modal */}
+      {showPromoteModal && (
+        <PromoteDryRunModal
+          onClose={() => setShowPromoteModal(false)}
+          onPromote={onPromote}
+        />
+      )}
     </div>
   )
 }

@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const CATEGORIES = ['Generic', 'FMCG', 'Real Estate', 'Apparel', 'Kids', 'Beauty']
+const SERVICE_CATEGORIES = ['Growth', 'Production', 'Influencer Marketing', 'Branding']
+const CREATIVE_SUBCATEGORIES = ['Creative - FMCG', 'Creative - Real Estate', 'Creative - Apparel', 'Creative - Kids', 'Creative - Beauty']
+const CATEGORIES = [...SERVICE_CATEGORIES, ...CREATIVE_SUBCATEGORIES, 'Generic']
 
 const CATEGORY_COLORS = {
-  'FMCG': 'text-green-accent border-green-accent/30 bg-green-accent/5',
-  'Real Estate': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Apparel': 'text-amber-accent border-amber-accent/30 bg-amber-accent/5',
-  'Kids': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
-  'Beauty': 'text-orange-400 border-orange-400/30 bg-orange-400/5',
+  'Growth': 'text-green-accent border-green-accent/30 bg-green-accent/5',
+  'Production': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
+  'Influencer Marketing': 'text-orange-400 border-orange-400/30 bg-orange-400/5',
+  'Branding': 'text-amber-accent border-amber-accent/30 bg-amber-accent/5',
+  'Creative - FMCG': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
+  'Creative - Real Estate': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
+  'Creative - Apparel': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
+  'Creative - Kids': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
+  'Creative - Beauty': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
   'Generic': 'text-text-secondary border-border-color bg-bg-tertiary',
 }
 
@@ -488,23 +494,44 @@ export default function TemplateEditor() {
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-2 flex-shrink-0 flex-wrap">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-              activeCategory === cat
-                ? CATEGORY_COLORS[cat]
-                : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-          >
-            {cat}
-            {JSON.stringify(templates[cat]) !== JSON.stringify(saved[cat]) && (
-              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
-            )}
-          </button>
-        ))}
+      <div className="flex flex-col gap-2 flex-shrink-0">
+        <div className="flex gap-2 flex-wrap items-center">
+          {[...SERVICE_CATEGORIES, 'Generic'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                activeCategory === cat
+                  ? CATEGORY_COLORS[cat]
+                  : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
+              }`}
+            >
+              {cat}
+              {JSON.stringify(templates[cat]) !== JSON.stringify(saved[cat]) && (
+                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-text-muted font-semibold uppercase tracking-wide pr-1">Creative:</span>
+          {CREATIVE_SUBCATEGORIES.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                activeCategory === cat
+                  ? CATEGORY_COLORS[cat]
+                  : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
+              }`}
+            >
+              {cat.replace('Creative - ', '')}
+              {JSON.stringify(templates[cat]) !== JSON.stringify(saved[cat]) && (
+                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Editor + preview */}

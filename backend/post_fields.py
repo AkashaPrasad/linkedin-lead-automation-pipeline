@@ -19,6 +19,8 @@ curious_coder/linkedin-post-search-scraper (cookie-authenticated):
   post.authorFullName     — full name (flat, not nested under author)
   post.authorProfileUrl   — profile URL (flat)
   post.authorHeadline     — headline (flat)
+  post.postedAtISO        — ISO timestamp (NOT post.postedAt, which is absent)
+  post.postedAtTimestamp  — epoch milliseconds (fallback if ISO is missing)
 """
 
 
@@ -76,3 +78,17 @@ def get_author_headline(post: dict) -> str:
         post.get("authorHeadline") or
         ""
     ).strip()
+
+
+def get_posted_date(post: dict) -> str:
+    iso = post.get("postedAt") or post.get("postedDate") or post.get("postedAtISO")
+    if iso:
+        return str(iso)
+    ts = post.get("postedAtTimestamp")
+    if ts:
+        try:
+            from datetime import datetime, timezone
+            return datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        except Exception:
+            return str(ts)
+    return ""

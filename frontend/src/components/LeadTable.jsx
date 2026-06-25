@@ -1,9 +1,13 @@
 const CATEGORY_COLORS = {
-  'FMCG': 'bg-green-accent/10 text-green-accent border-green-accent/20',
-  'Real Estate': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
-  'Apparel': 'bg-amber-accent/10 text-amber-accent border-amber-accent/20',
-  'Kids': 'bg-blue-400/10 text-blue-400 border-blue-400/20',
-  'Beauty': 'bg-orange-400/10 text-orange-400 border-orange-400/20',
+  'Growth': 'bg-green-accent/10 text-green-accent border-green-accent/20',
+  'Production': 'bg-blue-400/10 text-blue-400 border-blue-400/20',
+  'Influencer Marketing': 'bg-orange-400/10 text-orange-400 border-orange-400/20',
+  'Branding': 'bg-amber-accent/10 text-amber-accent border-amber-accent/20',
+  'Creative - FMCG': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
+  'Creative - Real Estate': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
+  'Creative - Apparel': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
+  'Creative - Kids': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
+  'Creative - Beauty': 'bg-purple-primary/10 text-purple-light border-purple-primary/20',
   'Generic': 'bg-text-muted/10 text-text-secondary border-text-muted/20',
 }
 

@@ -70,7 +70,7 @@ def _ensure_headers_sync(ws) -> int:
 
 
 def _post_to_row(post: dict) -> list:
-    from post_fields import get_content, get_post_url, get_author_name, get_author_url, get_author_headline
+    from post_fields import get_content, get_post_url, get_author_name, get_author_url, get_author_headline, get_posted_date
     return [
         get_content(post),
         get_post_url(post),
@@ -79,7 +79,7 @@ def _post_to_row(post: dict) -> list:
         post.get("_location_country") or "",
         get_author_headline(post),
         post.get("_company_name") or "",
-        str(post.get("postedAt") or post.get("postedDate") or ""),
+        get_posted_date(post),
         post.get("_search_query") or "",
         post.get("_email_in_post") or "",
         post.get("_contact_method") or "",

@@ -9,38 +9,48 @@ log = get_logger("gpt_classify")
 _openai_client = None
 _gemini_model = None
 
-USER_TEMPLATE = """You are analyzing a LinkedIn post for Decision Pinnacle — a full-service creative and digital marketing agency in India that works across multiple consumer industries.
+USER_TEMPLATE = """You are analyzing a LinkedIn post for Decision Pinnacle — a full-service creative and digital marketing agency in India.
 
-Decision Pinnacle classifies every qualified lead into exactly ONE of 6 INDUSTRY VERTICALS based on the AUTHOR'S BRAND/BUSINESS — never based on what marketing service they're asking for.
+Decision Pinnacle classifies every qualified lead into exactly ONE of 10 SERVICE CATEGORIES based on WHAT SERVICE the lead is asking for — not the brand's industry — EXCEPT for "Creative", which additionally requires identifying the brand's industry vertical (see below).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INDUSTRY VERTICALS
+SERVICE CATEGORIES
 
-1. "FMCG" — Fast-Moving Consumer Goods: packaged food & snacks, beverages, dairy, edible oils, home care / cleaning products, plain hygiene staples (soap, toothpaste, detergent, sanitizer), grocery/CPG, nutrition & wellness supplements, pet food, and other fast-turnover consumable goods.
-   Signals: "FMCG", "CPG", "packaged food", "snacks brand", "beverage", "D2C food brand", "home care", "consumer goods", "grocery".
+1. "Growth" — performance marketing (Meta/Google/YouTube ads), marketplace and quick-commerce growth (Amazon, Flipkart, Myntra, Zepto, Blinkit), ROAS/funnel/conversion-focused asks, D2C scaling.
+   Signals: "performance marketing", "ROAS", "paid ads", "Meta ads", "Google ads", "marketplace growth", "Amazon/Flipkart/Myntra/Zepto/Blinkit", "scale our D2C brand", "growth agency", "growth marketing".
 
-2. "Real Estate" — property developers/builders, real estate brokers and consultants, construction companies, property portals, project-launch marketing (apartments/villas/plots/commercial spaces), real estate finance/home-loan marketing.
-   Signals: "real estate", "property", "builder", "developer", "apartments", "villas", "plots", "RERA", "construction", "realty".
+2. "Production" — making the physical/video creative asset itself: ad films, TVCs, photo shoots, video shoots, post-production.
+   Signals: "production house", "video production agency", "ad film", "TVC", "shoot", "photoshoot", "video production", "campaign film".
 
-3. "Apparel" — clothing and fashion brands for ADULTS, footwear, fashion accessories, textiles, ethnic/western wear, activewear. (Use "Kids" instead if the apparel is specifically for children/babies.)
-   Signals: "apparel", "fashion brand", "clothing", "footwear", "ethnic wear", "D2C fashion".
+3. "Influencer Marketing" — influencer/creator partnerships, UGC, influencer campaigns.
+   Signals: "influencer marketing agency", "influencer campaign", "creator partnership", "UGC content", "influencer collaboration", "creator-led campaign".
 
-4. "Kids" — baby and children's products of ANY type: baby care, diapers, baby gear (strollers/cribs), kids' clothing/footwear/toys, maternity products, parenting brands. Kids/baby ALWAYS outranks Apparel or Beauty when the product is explicitly for infants/children.
-   Signals: "baby", "kids", "infant", "toddler", "parenting", "maternity", "toys", "diaper", "baby care", "children's".
+4. "Branding" — brand identity, brand book, naming, positioning, logo design, packaging design.
+   Signals: "branding agency", "brand identity", "brand book", "logo design", "packaging design", "rebrand", "brand strategy", "brand positioning".
 
-5. "Beauty" — cosmetics, skincare, haircare, makeup, fragrance/perfume, grooming, and beauty & personal care (BPC) brands for adults (non-baby).
-   Signals: "beauty", "skincare", "cosmetics", "makeup", "haircare", "BPC", "grooming", "fragrance", "perfume", "personal care" (only when clearly cosmetic, not a plain hygiene staple).
+5. "Creative" — campaign concept/creative direction and content strategy asks broader than production/influencer/branding alone (e.g. general "creative agency", "creative partner", "social media agency", "content strategy", "campaign idea").
+   Signals: "creative agency", "creative partner", "social media agency", "content strategy", "campaign concept", "content calendar".
+   IMPORTANT: If (and only if) the category is "Creative", you must ALSO determine the brand's INDUSTRY VERTICAL from this list, using these definitions:
+   - "FMCG" — packaged food/snacks, beverages, dairy, edible oils, home care, plain hygiene staples, grocery/CPG, supplements, pet food.
+   - "Real Estate" — property developers/builders, brokers, construction, project-launch marketing.
+   - "Apparel" — clothing/fashion for ADULTS, footwear, fashion accessories, textiles. (Use Kids instead if explicitly for children/babies.)
+   - "Kids" — baby/children's products of ANY type — ALWAYS outranks Apparel or Beauty when the product is explicitly for infants/children.
+   - "Beauty" — cosmetics, skincare, haircare, makeup, fragrance, grooming (adult, non-baby).
+   If the industry fits one of these 5 → output category as "Creative - <Vertical>" exactly, e.g. "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel", "Creative - Kids", "Creative - Beauty".
+   If the industry does NOT fit any of these 5 (e.g. SaaS, fintech, healthcare, education, automotive, B2B services) → output category as "Generic" instead. Do not invent a 6th vertical, and do not output bare "Creative" without a vertical.
 
-6. "Generic" — anything that does not clearly fit one of the 5 verticals above (e.g. SaaS/tech, fintech, healthcare, education, automotive, B2B services, home decor/furniture), OR the post equally spans multiple unrelated verticals, OR the industry genuinely cannot be determined from the post or author context.
+6. "Generic" — use this when:
+   - The post doesn't clearly fit Growth, Production, Influencer Marketing, or Branding, AND it's not a Creative-type ask either, OR
+   - It IS a Creative-type ask but the brand's industry doesn't fit FMCG/Real Estate/Apparel/Kids/Beauty, OR
+   - The service type genuinely cannot be determined from the post or author context. Never guess wildly.
 
 TIEBREAKERS (apply in this order — never skip these):
-- Baby/kids product → ALWAYS "Kids", even if it's also apparel ("baby clothing"), beauty ("baby skincare"), or FMCG ("baby food").
-- Cosmetic/skincare/makeup product → "Beauty", even if sold through FMCG-style D2C channels.
-- Plain hygiene/cleaning staple (soap, toothpaste, detergent, sanitizer) with NO beauty/cosmetic positioning → "FMCG".
-- Food, beverage, or home-care product → "FMCG".
-- Real estate company that also mentions interior design/home decor as a side line → still "Real Estate" if the core business is property sales/development; if the post is ONLY about home decor/furniture with no property angle → "Generic".
-- Two unrelated industries mentioned with equal weight, neither dominant → "Generic".
-- Cannot tell the industry from the post or author headline/company → "Generic". Never guess wildly.
+- A request specifically for a "production house" / "video production agency" is "Production" even if it's for a creative campaign — production is the literal deliverable being asked for.
+- A request for a general "social media agency" or "creative agency" (no specific production/influencer/branding emphasis) is "Creative", not "Branding".
+- A request explicitly emphasizing brand identity/logo/brand book/naming is "Branding", even if it also mentions general creative work.
+- If a post asks for MULTIPLE services with no clear primary, prefer in this order: Branding > Production > Influencer Marketing > Growth > Creative (the more specific/concrete ask wins over the broader "Creative" catch-all).
+- Within "Creative" only: baby/kids product → ALWAYS "Creative - Kids", even if also apparel or FMCG. Cosmetic/skincare/makeup → "Creative - Beauty" even if sold via FMCG-style D2C channels. Plain hygiene/cleaning staple with no beauty positioning → "Creative - FMCG".
+- Cannot tell the service type or (for Creative) the industry → "Generic". Never guess wildly.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Extract FOUR things from the post below:
@@ -55,7 +65,7 @@ Extract FOUR things from the post below:
    - If not in the post, infer it from the AUTHOR HEADLINE (e.g. "Founder at Sleepyhead" → "Sleepyhead", "Marketing Lead, XYZ Pvt Ltd" → "XYZ Pvt Ltd").
    - If genuinely no company name is identifiable from either source, return null. Do not invent a name.
 
-3. CATEGORY: Pick exactly ONE of: "FMCG", "Real Estate", "Apparel", "Kids", "Beauty", "Generic" using the vertical definitions and tiebreakers above.
+3. CATEGORY: Pick exactly ONE of: "Growth", "Production", "Influencer Marketing", "Branding", "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel", "Creative - Kids", "Creative - Beauty", "Generic" using the definitions and tiebreakers above.
 
 4. CONTACT METHOD: How does the post tell people to reach out? Pick exactly ONE, in this priority order (check Email first, then Phone, then DM — use the highest-priority one that's actually present):
    - "Email" — an email address is given anywhere in the post (e.g. "email me at x@y.com", "send your portfolio to x@y.com").
@@ -70,9 +80,13 @@ AUTHOR NAME: {author_name}
 AUTHOR HEADLINE: {author_headline}
 
 Return ONLY this exact JSON (no markdown, no explanation):
-{{"email_in_post": "email@example.com or null", "company_name": "Company Name or null", "category": "FMCG", "contact_method": "Email"}}"""
+{{"email_in_post": "email@example.com or null", "company_name": "Company Name or null", "category": "Growth", "contact_method": "Email"}}"""
 
-VALID_CATEGORIES = {"FMCG", "Real Estate", "Apparel", "Kids", "Beauty", "Generic"}
+VALID_CATEGORIES = {
+    "Growth", "Production", "Influencer Marketing", "Branding",
+    "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel",
+    "Creative - Kids", "Creative - Beauty", "Generic",
+}
 VALID_CONTACT_METHODS = {"Email", "Phone Number", "DM on LinkedIn", "Not specified"}
 
 

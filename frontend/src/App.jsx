@@ -225,6 +225,31 @@ export default function App() {
     _connectSSE()
   }, [_resetUI, _connectSSE, handleSSEEvent])
 
+  const promoteDryRun = useCallback(async (tabName) => {
+    _resetUI(0)
+    setCheckpoint(null)
+
+    try {
+      const res = await fetch('/api/pipeline/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tab_name: tabName }),
+      })
+      if (!res.ok) {
+        const body = await res.json()
+        setError(body.detail || 'Failed to start promote')
+        return false
+      }
+    } catch (e) {
+      setError('Cannot reach the backend API from this deployment.')
+      return false
+    }
+
+    setIsRunning(true)
+    _connectSSE()
+    return true
+  }, [_resetUI, _connectSSE])
+
   const stopPipeline = useCallback(async () => {
     try {
       const res = await fetch('/api/pipeline/stop', { method: 'POST' })
@@ -344,6 +369,7 @@ export default function App() {
               onRun={startPipeline}
               onResume={resumePipeline}
               onStop={stopPipeline}
+              onPromote={promoteDryRun}
               onDismissCheckpoint={() => {
                 fetch('/api/pipeline/checkpoint', { method: 'DELETE' }).catch(() => {})
                 setCheckpoint(null)

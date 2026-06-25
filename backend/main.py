@@ -230,6 +230,58 @@ async def delete_checkpoint():
     return {"status": "cleared"}
 
 
+# ── Promote dry run to real send ──────────────────────────────────────────────
+@app.get("/api/pipeline/promote/tabs")
+async def list_dry_run_tabs():
+    """Lists sheet tabs that look like dry-run tabs (titled '[DRY] <date>'),
+    so the UI can offer a picker instead of requiring the exact tab name."""
+    from stages.sheets_writer import open_sheets
+    try:
+        sh = await open_sheets()
+        titles = await asyncio.to_thread(lambda: [ws.title for ws in sh.worksheets()])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not read sheet tabs: {e}")
+    dry_tabs = [t for t in titles if t.startswith("[DRY]")]
+    return {"tabs": dry_tabs}
+
+
+@app.get("/api/pipeline/promote/preview")
+async def promote_preview(tab: str):
+    """Read-only — counts how many rows in the given tab qualify for
+    promotion, without writing or sending anything."""
+    from promote import count_promotable_sync
+    try:
+        result = await asyncio.to_thread(count_promotable_sync, tab)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Could not read tab '{tab}': {e}")
+    return result
+
+
+@app.post("/api/pipeline/promote")
+async def promote_dry_run(request: Request):
+    global _is_running, _current_task
+    if _is_running:
+        raise HTTPException(status_code=409, detail="Pipeline already in progress")
+    body = await request.json()
+    tab_name = (body.get("tab_name") or "").strip()
+    if not tab_name:
+        raise HTTPException(status_code=400, detail="tab_name required")
+    missing = validate_config()
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing env vars: {', '.join(missing)}")
+    if not service_account_path().exists():
+        raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
+    _is_running = True
+    _event_history.clear()
+
+    async def _promote_wrapper():
+        from promote import promote_dry_run_async
+        await _pipeline_run_core(lambda emit: promote_dry_run_async(emit, tab_name))
+
+    _current_task = asyncio.create_task(_promote_wrapper())
+    return {"status": "started", "tab_name": tab_name}
+
+
 # ── History endpoints ─────────────────────────────────────────────────────────
 @app.get("/api/history")
 async def get_history():
@@ -271,14 +323,18 @@ TEMPLATES_FILE = Path(__file__).parent.parent / "templates.json"
 
 
 def _default_templates() -> dict:
-    from templates import growth, branding, creative, generic, marketplace
+    from templates import generic
     return {
-        "Beauty": {"subject": growth.SUBJECT, "body": growth.BODY},
-        "Apparel": {"subject": branding.SUBJECT, "body": branding.BODY},
-        "Kids": {"subject": creative.SUBJECT, "body": creative.BODY},
-        "Real Estate": {"subject": generic.SUBJECT, "body": generic.BODY},
         "Generic": {"subject": generic.SUBJECT, "body": generic.BODY},
-        "FMCG": {"subject": marketplace.SUBJECT, "body": marketplace.BODY},
+        "Growth": {"subject": "", "body": ""},
+        "Production": {"subject": "", "body": ""},
+        "Influencer Marketing": {"subject": "", "body": ""},
+        "Branding": {"subject": "", "body": ""},
+        "Creative - FMCG": {"subject": "", "body": ""},
+        "Creative - Real Estate": {"subject": "", "body": ""},
+        "Creative - Apparel": {"subject": "", "body": ""},
+        "Creative - Kids": {"subject": "", "body": ""},
+        "Creative - Beauty": {"subject": "", "body": ""},
     }
 
 
