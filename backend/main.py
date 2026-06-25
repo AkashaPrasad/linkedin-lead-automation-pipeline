@@ -76,15 +76,78 @@ async def _pipeline_wrapper():
     await _pipeline_run_core(run_pipeline_async)
 
 
+# A hung/runaway automated run must never block forever — APScheduler shares
+# the same event loop as the rest of the app, so an unbounded scheduled job
+# is a real risk to overall uptime, not just to that one run. 3 hours is
+# generous for the heaviest realistic workload but still a hard ceiling.
+AUTOMATION_TIMEOUT_SECONDS = 3 * 60 * 60
+
+
 async def _scheduled_pipeline_run():
-    global _is_running
+    global _is_running, _current_task
+
     if _is_running:
-        log.info("Scheduled run skipped — pipeline already running")
+        log.warning("Scheduled run skipped — pipeline already running")
+        await send_alert("⏭ Scheduled run skipped — a pipeline run was already in progress")
         return
+
+    # Manual runs validate config before starting; the scheduled path
+    # previously skipped this and could fail deep into a multi-stage run
+    # with no one watching. Fail fast instead.
+    missing = validate_config()
+    if missing:
+        log.error(f"Scheduled run aborted — missing env vars: {', '.join(missing)}")
+        await send_alert(f"❌ Scheduled run aborted — missing env vars: {', '.join(missing)}")
+        return
+    if not service_account_path().exists():
+        log.error("Scheduled run aborted — service_account.json not found")
+        await send_alert("❌ Scheduled run aborted — service_account.json not found in backend/ folder")
+        return
+
+    cfg = admin_cfg.load()
+    if cfg.get("scraping", {}).get("use_cookie_actor"):
+        from config import get_linkedin_cookie
+        cookie_ok = False
+        cookie_raw = get_linkedin_cookie()
+        if cookie_raw:
+            try:
+                parsed = json.loads(cookie_raw)
+                cookie_ok = isinstance(parsed, list) and len(parsed) > 0
+            except Exception:
+                cookie_ok = False
+        if not cookie_ok:
+            log.error("Scheduled run aborted — cookie scraping enabled but LINKEDIN_COOKIE missing/invalid")
+            await send_alert(
+                "❌ Scheduled run aborted — cookie scraping is on but the LinkedIn cookie is "
+                "missing or invalid. Update it in Admin Panel, or turn off cookie mode."
+            )
+            return
+
     _is_running = True
     _event_history.clear()
     log.info("Scheduled pipeline run starting")
-    await _pipeline_run_core(run_pipeline_async)
+    await send_alert("⏰ Scheduled pipeline run starting")
+
+    try:
+        _current_task = asyncio.create_task(_pipeline_run_core(run_pipeline_async))
+        await asyncio.wait_for(_current_task, timeout=AUTOMATION_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        log.error(f"Scheduled run exceeded {AUTOMATION_TIMEOUT_SECONDS}s — cancelling")
+        if _current_task:
+            _current_task.cancel()
+        await send_alert(
+            f"🛑 Scheduled run timed out after {AUTOMATION_TIMEOUT_SECONDS // 3600}h and was cancelled automatically"
+        )
+    except Exception as e:
+        log.error(f"Scheduled run crashed: {e}", exc_info=True)
+        await send_alert(f"❌ Scheduled run crashed: {str(e)[:200]}")
+    finally:
+        # Belt-and-suspenders — _pipeline_run_core already resets _is_running
+        # in its own finally, but a hard guarantee here means a stuck flag
+        # (and the "already running forever" lockup that causes) is no
+        # longer possible no matter what goes wrong above.
+        _is_running = False
+        _current_task = None
 
 
 # ── Startup / shutdown ────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 # ─── Secrets & Credentials ───────────────────────────────────────────────────
 .env
 backend/service_account.json
+linkedin_cookie.json
 
 # ─── Runtime / Generated ─────────────────────────────────────────────────────
 *.log

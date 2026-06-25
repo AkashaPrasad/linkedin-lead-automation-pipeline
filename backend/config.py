@@ -53,29 +53,30 @@ def has_openai() -> bool:
 def has_gemini() -> bool:
     return not _is_placeholder(GEMINI_API_KEY)
 
-_ENV_FILE = Path(__file__).parent.parent / ".env"
-
-
 def get_linkedin_cookie() -> str:
-    """Reads live from the environment (not a cached module constant) so a
-    UI-driven update takes effect on the next pipeline run without a restart."""
+    """Reads fresh from disk each call (not cached) so a UI-driven update
+    takes effect on the next pipeline run without a restart.
+
+    Previously this was stored in .env, which is gitignored and never part
+    of the Docker image — every redeploy started a fresh container with no
+    .env file at all, silently wiping the cookie regardless of any mounted
+    volume. Now it lives under persistent_data_path, same as
+    admin_config.json/templates.json, so it actually survives redeploys
+    once CONFIG_DIR points at a mounted volume."""
+    path = persistent_data_path("linkedin_cookie.json")
+    if path.exists():
+        return path.read_text().strip()
+    # Fallback for local dev / anyone setting it directly as an env var
     return os.getenv("LINKEDIN_COOKIE", "")
 
 
 def set_linkedin_cookie(value: str) -> None:
-    """Updates the cookie for the running process and persists it to .env
-    (gitignored) so it survives a restart."""
+    """Persists the cookie under persistent_data_path so it survives
+    redeploys once CONFIG_DIR is configured."""
+    path = persistent_data_path("linkedin_cookie.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value)
     os.environ["LINKEDIN_COOKIE"] = value
-    lines = _ENV_FILE.read_text().splitlines() if _ENV_FILE.exists() else []
-    found = False
-    for i, line in enumerate(lines):
-        if line.startswith("LINKEDIN_COOKIE="):
-            lines[i] = f"LINKEDIN_COOKIE={value}"
-            found = True
-            break
-    if not found:
-        lines.append(f"LINKEDIN_COOKIE={value}")
-    _ENV_FILE.write_text("\n".join(lines) + "\n")
 
 
 def service_account_path() -> Path:
