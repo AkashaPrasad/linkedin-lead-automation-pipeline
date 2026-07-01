@@ -18,11 +18,30 @@ _COOKIE_ACTOR_USER_AGENT = (
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
-# Maps our postedLimit values to LinkedIn's own search URL datePosted param
+# Maps our postedLimit values to LinkedIn's own search URL datePosted param.
+# LinkedIn's search UI has no native "past 48 hours" bucket — "48h" maps to
+# the closest broader bucket ("past-week") as a first-pass server-side
+# filter. This is NOT the final word on what gets through: _filter_by_actual_date()
+# below independently re-checks every post's real timestamp afterward, so a
+# too-broad first pass here only means slightly more posts to filter, never
+# a stale post slipping past the real cutoff.
 _DATE_POSTED_MAP = {
+    "1h": "past-24h",
     "24h": "past-24h",
+    "48h": "past-week",
     "week": "past-week",
     "month": "past-month",
+}
+
+# Hours corresponding to each postedLimit value, used to independently verify
+# every scraped post's ACTUAL posted timestamp — never just trust that the
+# actor honored the date filter it was given. This is what actually prevents
+# stale posts (e.g. an 11-month-old post surfacing despite a 48h filter) from
+# reaching the pipeline, regardless of which actor scraped it or whether that
+# actor's own date filtering has any gaps.
+_POSTED_LIMIT_HOURS = {
+    "1h": 1, "24h": 24, "48h": 48, "week": 24 * 7, "month": 24 * 30,
+    "3months": 24 * 90, "6months": 24 * 180, "year": 24 * 365,
 }
 
 
@@ -95,6 +114,51 @@ def _build_run_input(cfg: dict, query: str) -> dict:
     if scraping.get("author_geo_ids"):
         run_input["authorGeoIds"] = [str(i) for i in scraping["author_geo_ids"]]
     return run_input
+
+
+def _filter_by_actual_date(posts: list[dict], posted_limit: str) -> tuple[list[dict], int, int]:
+    """Independently verifies each post's ACTUAL posted timestamp against
+    the configured window — this is the authoritative check, not the actor
+    input parameters (which one actor mode was silently not even sending
+    for "48h", and neither actor's own date filtering should be trusted
+    blindly regardless). Returns (kept, dropped_stale_count, unparseable_count).
+
+    Posts with no parseable date are kept (not dropped) — an actor
+    occasionally omitting the date field is a data-quality gap, not
+    evidence the post is stale, and dropping them risks losing real leads.
+    """
+    hours = _POSTED_LIMIT_HOURS.get(posted_limit)
+    if hours is None:
+        return posts, 0, 0
+
+    from post_fields import get_posted_date
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    kept = []
+    dropped_stale = 0
+    unparseable = 0
+    for p in posts:
+        raw = get_posted_date(p)
+        if not raw:
+            unparseable += 1
+            kept.append(p)
+            continue
+        try:
+            normalized = raw.replace("Z", "+00:00")
+            posted_at = datetime.fromisoformat(normalized)
+            if posted_at.tzinfo is None:
+                posted_at = posted_at.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            unparseable += 1
+            kept.append(p)
+            continue
+
+        if posted_at < cutoff:
+            dropped_stale += 1
+        else:
+            kept.append(p)
+
+    return kept, dropped_stale, unparseable
 
 
 def _run_apify_sync(run_input: dict, actor_id: str) -> list[dict]:
@@ -189,6 +253,20 @@ async def run_apify(emit, cfg: dict | None = None) -> list[dict]:
         if before != len(posts):
             await emit({"event": "progress", "stage": 1,
                         "message": f"Filtered {before - len(posts)} posts shorter than {min_len} chars"})
+
+    # Authoritative date check — verifies each post's ACTUAL posted
+    # timestamp against the configured window, independent of whether the
+    # actor's own date-filter input was honored correctly. This is what
+    # prevents a stale post (e.g. months old) from slipping through despite
+    # a tight window like "past 48 hours" being selected.
+    posted_limit = scraping.get("posted_limit", "month")
+    posts, dropped_stale, unparseable = _filter_by_actual_date(posts, posted_limit)
+    if dropped_stale:
+        await emit({"event": "progress", "stage": 1,
+                    "message": f"Filtered {dropped_stale} posts older than the configured '{posted_limit}' window"})
+        log.info(f"STAGE 1 | Date check: dropped {dropped_stale} stale posts (window={posted_limit})")
+    if unparseable:
+        log.warning(f"STAGE 1 | Date check: {unparseable} posts had no parseable posted date — kept, not verified")
 
     # Apply total cap
     if len(posts) > total_cap:
