@@ -10,6 +10,7 @@ HEADERS = [
     "Author Headline", "Company Name", "Posted Date", "Search Query", "Email From Post",
     "Contact Method", "Apollo Email", "Final Email", "Has Email", "Category",
     "Lead Status", "Template Sent", "Sent Status", "Sent Timestamp", "Error",
+    "Repeat Lead",
 ]
 
 COLUMNS = {
@@ -18,6 +19,7 @@ COLUMNS = {
     "search_query": 8, "email_from_post": 9, "contact_method": 10, "apollo_email": 11,
     "final_email": 12, "has_email": 13, "category": 14, "lead_status": 15,
     "template_sent": 16, "sent_status": 17, "sent_timestamp": 18, "error": 19,
+    "repeat_lead": 20,
 }
 
 
@@ -39,7 +41,7 @@ def _ensure_worksheet_sync(sh, tab_name: str):
         ws = sh.worksheet(tab_name)
         return ws
     except Exception:
-        ws = sh.add_worksheet(title=tab_name, rows=2000, cols=20)
+        ws = sh.add_worksheet(title=tab_name, rows=2000, cols=len(HEADERS))
         return ws
 
 
@@ -48,8 +50,19 @@ def _ensure_headers_sync(ws) -> int:
     rows (including header). Data rows are always written in HEADERS column
     order regardless of what the sheet's header row says, so if the header
     row is missing a newer column (e.g. a sheet created before "Contact
-    Method" existed), we refresh row 1 in place — this only rewrites the
-    label text, never touches any data row."""
+    Method" or "Repeat Lead" existed), we refresh row 1 in place — this only
+    rewrites the label text, never touches any data row.
+
+    Also widens the sheet's column count if it's narrower than HEADERS —
+    older sheets were created with a fixed column count, and writing data
+    into a column beyond that raises a Sheets API "exceeds grid limits"
+    error instead of silently expanding."""
+    try:
+        if ws.col_count < len(HEADERS):
+            ws.resize(cols=len(HEADERS))
+    except Exception as e:
+        log.warning(f"Could not widen sheet columns: {e}")
+
     try:
         all_vals = ws.get_all_values()
     except Exception:
@@ -92,6 +105,7 @@ def _post_to_row(post: dict) -> list:
         "PENDING",
         "",  # Sent timestamp
         "",  # Error
+        post.get("_repeat_lead") or "No",
     ]
 
 

@@ -22,7 +22,9 @@ DEFAULT_SKIP_CATEGORY = "Not asking for an agency"
 
 SYSTEM_PROMPT = "You are a strict lead qualifier for a creative and digital marketing agency. Return ONLY valid JSON. No markdown."
 
-USER_TEMPLATE = """You are qualifying LinkedIn posts for Decision Pinnacle — a full-service creative and digital marketing agency based in Bangalore (Bengaluru), India. Decision Pinnacle's DOMAIN (the services it actually offers) is: performance marketing (Meta/Google/YouTube), social media management, branding (brand identity/brand books), creative campaigns and content production (ad films, TVCs, shoots, influencer content), marketplace growth (Amazon/Flipkart/Myntra/Zepto/Blinkit), PR, and — sourced globally regardless of brand location — website design/development, brand logo design, and packaging design.
+USER_TEMPLATE = """You are qualifying LinkedIn posts for Decision Pinnacle — a full-service creative and digital marketing agency based in Bangalore (Bengaluru), India. Decision Pinnacle's DOMAIN (the services it actually offers) is: performance marketing (Meta/Google/YouTube), social media management, branding (brand identity/brand books), creative campaigns and content production (ad films, TVCs, shoots, influencer content, AI-generated video/ad content — AI ad films, AI/text-to-video ad creation, AI avatar or UGC-style AI ads), marketplace growth (Amazon/Flipkart/Myntra/Zepto/Blinkit), PR, and — sourced globally regardless of brand location — website design/development, brand logo design, and packaging design.
+
+IMPORTANT: AI-generated video/ad content creation (AI video generation, AI ad generation, text-to-video ads, AI avatar/UGC-style ad production) is content production — squarely IN-DOMAIN — even though the word "AI" appears. Do NOT treat these as IT/software development or otherwise out of domain; do NOT skip them.
 
 Decision Pinnacle is an AGENCY. It works with brands and businesses as a vendor/agency partner — not as an individual hire, and not as a partner to other agencies.
 
@@ -47,6 +49,8 @@ Examples that MUST be kept:
 • "Any good branding or creative agency for a fashion label? Comment below"
 • "We need a social media agency, preferably with experience in beauty/FMCG"
 • "Looking for an agency to produce our brand's TVC/ad film" (this is content production, our domain — KEEP even though a TVC airs on TV/offline media)
+• "Looking for an agency that can do AI video generation for our product ads" (AI-generated content production, our domain — KEEP, this is NOT software/IT development)
+• "Need an agency for AI-generated ad creatives / AI UGC ads for our brand" (KEEP — content production, not out of domain)
 
 When genuinely unsure whether a borderline post counts as an explicit agency ask, lean KEEP rather than SKIP — false rejections cost us real leads, false keeps just cost one extra reply. Only SKIP confidently when a rule below clearly applies.
 
@@ -121,6 +125,9 @@ The post explicitly asks for an agency, but the TYPE of agency requested is clea
 • Interior design / architecture / construction contractors (unless explicitly paired with branding/marketing work)
 • Courier/logistics, IT/software development (unless it's specifically website design), accounting/financial-advisory agencies
 → SKIP, skip_category = "Out of domain"
+
+EXCEPTION — do NOT use "Out of domain" for AI-generated video/ad content: requests for AI video generation, AI ad generation, text-to-video ad creation, or AI avatar/UGC-style ad production are content production (our domain), not IT/software development. These must be evaluated normally like any other content-production ask, not skipped for this reason.
+
 If unsure whether a service is in-domain, default to KEEP rather than this category — only use it when the requested agency type is clearly unrelated to marketing/creative/digital/PR/web-logo-packaging work.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

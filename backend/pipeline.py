@@ -8,6 +8,7 @@ from stages.deduplication import run_deduplication
 from stages.gpt_filter import run_gpt_filter
 from stages.location_filter import apply_location_filter
 from stages.gpt_classify import run_gpt_classify
+from stages.repeat_lead_filter import check_repeat_leads
 from stages.sheets_writer import open_sheets, run_sheets_writer, finalize_sheet_columns
 from stages.apollo_enricher import run_apollo_enricher
 from stages.email_decision import run_email_decision
@@ -163,8 +164,9 @@ async def run_pipeline_async(emit):
         try:
             master_ws_tmp = await asyncio.to_thread(sh.worksheet, "Master")
         except Exception:
+            from stages.sheets_writer import HEADERS as _HEADERS
             master_ws_tmp = await asyncio.to_thread(
-                lambda: sh.add_worksheet(title="Master", rows=2000, cols=20)
+                lambda: sh.add_worksheet(title="Master", rows=2000, cols=len(_HEADERS))
             )
 
         # ── Stage 2: Deduplication ───────────────────────────────────────
@@ -223,6 +225,31 @@ async def run_pipeline_async(emit):
         # ── Stage 4: GPT Classify ──────────────────────────────────────
         real_posts = await run_gpt_classify(real_posts, emit)
         await send_alert(f"✅ Stage 4 done — {len(real_posts)} leads classified")
+
+        # Repeat lead check — runs now that we know each post's category.
+        # Same author + same category already contacted = true duplicate ask,
+        # held back. Same author + a DIFFERENT category (e.g. previously
+        # asked about AI video generation, now asking about performance
+        # marketing) = a genuinely new opportunity, kept and flagged so it's
+        # visible as a repeat contact rather than being silently merged in.
+        real_posts, repeat_duplicates, repeat_stats = await check_repeat_leads(real_posts, master_ws_tmp, emit)
+        skipped_posts = skipped_posts + repeat_duplicates
+        if repeat_stats["total"]:
+            await send_alert(
+                f"✅ Repeat lead check — {repeat_stats['new_authors']} new, "
+                f"{repeat_stats['repeat_new_ask']} repeat contacts with a new ask, "
+                f"{repeat_stats['duplicate_same_ask']} duplicate asks held back"
+            )
+        stats["real"] = len(real_posts)
+        await emit({"event": "stats", **stats})
+
+        if not real_posts:
+            await run_sheets_writer([], skipped_posts, sh, emit, dry_run=dry_run)
+            await emit({"event": "complete", "scraped": stats["scraped"], "real": 0,
+                        "with_email": 0, "sent": 0, "failed": 0, "no_email": 0,
+                        "duration_min": round((time.time() - pipeline_start) / 60, 1)})
+            await send_alert("✅ Pipeline complete — 0 real leads found (all were duplicate asks)")
+            return
 
         # Checkpoint after Stage 4 — expensive AI work done
         cp.save(4, {
@@ -335,8 +362,9 @@ async def resume_pipeline_async(emit):
                 try:
                     daily_ws = await asyncio.to_thread(sh.worksheet, daily_tab)
                 except Exception:
+                    from stages.sheets_writer import HEADERS as _HEADERS
                     daily_ws = await asyncio.to_thread(
-                        lambda: sh.add_worksheet(title=daily_tab, rows=2000, cols=20)
+                        lambda: sh.add_worksheet(title=daily_tab, rows=2000, cols=len(_HEADERS))
                     )
             else:
                 daily_ws = master_ws

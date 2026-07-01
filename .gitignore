@@ -6,6 +6,8 @@ linkedin_cookie.json
 # ─── Runtime / Generated ─────────────────────────────────────────────────────
 *.log
 pipeline_checkpoint.json
+run_history.json
+run_logs/
 
 # ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/

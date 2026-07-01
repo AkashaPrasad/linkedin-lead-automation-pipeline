@@ -40,25 +40,49 @@ async def broadcast(event: dict):
 
 
 async def _pipeline_run_core(wrapper_fn):
-    """Runs the pipeline, captures history, resets _is_running."""
+    """Runs the pipeline, captures the FULL event transcript + history,
+    resets _is_running. Every run is recorded — completed, failed, or
+    stopped — with its complete log, not just successful ones, so a crash
+    or manual stop can actually be investigated afterward via History."""
     global _is_running
     last_stats: dict = {}
     complete_data: dict | None = None
+    error_data: dict | None = None
+    stopped_data: dict | None = None
+    full_log: list[dict] = []
 
     async def _capturing_emit(event: dict):
-        nonlocal complete_data
+        nonlocal complete_data, error_data, stopped_data
+        full_log.append(event)
         await broadcast(event)
-        if event.get("event") == "stats":
+        ev = event.get("event")
+        if ev == "stats":
             last_stats.update(event)
-        elif event.get("event") == "complete":
+        elif ev == "complete":
             complete_data = event
+        elif ev == "error":
+            error_data = event
+        elif ev == "stopped":
+            stopped_data = event
 
+    exc_message: str | None = None
     try:
         await wrapper_fn(_capturing_emit)
+    except Exception as e:
+        # Not every failure path emits an "error" SSE event (e.g. promote
+        # raising RuntimeError before any event fires) — without this, such
+        # a run would be recorded as "unknown" with no indication of what
+        # went wrong. Capture it here, then re-raise so existing callers
+        # (background task logging, _scheduled_pipeline_run's own handler)
+        # behave exactly as before.
+        exc_message = str(e)
+        raise
     finally:
         _is_running = False
+
         if complete_data:
-            run_history.append_run({
+            summary = {
+                "status": "completed",
                 "scraped": complete_data.get("scraped", 0),
                 "real": complete_data.get("real", 0),
                 "enriched": last_stats.get("enriched", 0),
@@ -68,8 +92,59 @@ async def _pipeline_run_core(wrapper_fn):
                 "no_email": complete_data.get("no_email", 0),
                 "duration_min": complete_data.get("duration_min", 0),
                 "dry_run": complete_data.get("dry_run", False),
-                "date": dt_date.today().isoformat(),
-            })
+            }
+        elif error_data:
+            summary = {
+                "status": "failed",
+                "scraped": last_stats.get("scraped", 0),
+                "real": last_stats.get("real", 0),
+                "enriched": last_stats.get("enriched", 0),
+                "with_email": 0,
+                "sent": last_stats.get("sent", 0),
+                "failed": 0,
+                "no_email": 0,
+                "duration_min": 0,
+                "dry_run": False,
+                "error_message": error_data.get("message", ""),
+            }
+        elif stopped_data:
+            summary = {
+                "status": "stopped",
+                "scraped": last_stats.get("scraped", 0),
+                "real": last_stats.get("real", 0),
+                "enriched": last_stats.get("enriched", 0),
+                "with_email": 0,
+                "sent": last_stats.get("sent", 0),
+                "failed": 0,
+                "no_email": 0,
+                "duration_min": 0,
+                "dry_run": False,
+            }
+        elif exc_message:
+            summary = {
+                "status": "failed",
+                "scraped": last_stats.get("scraped", 0),
+                "real": last_stats.get("real", 0),
+                "enriched": last_stats.get("enriched", 0),
+                "with_email": 0,
+                "sent": last_stats.get("sent", 0),
+                "failed": 0,
+                "no_email": 0,
+                "duration_min": 0,
+                "dry_run": False,
+                "error_message": exc_message,
+            }
+        else:
+            # Crashed before emitting anything at all (e.g. failed to even
+            # reach Stage 1) — still record it so it's not invisible.
+            summary = {
+                "status": "unknown", "scraped": 0, "real": 0, "enriched": 0,
+                "with_email": 0, "sent": 0, "failed": 0, "no_email": 0,
+                "duration_min": 0, "dry_run": False,
+            }
+
+        summary["date"] = dt_date.today().isoformat()
+        run_history.append_run(summary, full_log)
 
 
 async def _pipeline_wrapper():
@@ -351,6 +426,14 @@ async def get_history():
     return run_history.get_all()
 
 
+@app.get("/api/history/{run_id}/logs")
+async def get_history_logs(run_id: str):
+    logs = run_history.get_log(run_id)
+    if logs is None:
+        raise HTTPException(status_code=404, detail="No logs found for this run")
+    return {"run_id": run_id, "events": logs}
+
+
 # ── Brevo stats endpoint ──────────────────────────────────────────────────────
 @app.get("/api/brevo/stats")
 async def get_brevo_stats(date: str = None):
@@ -455,8 +538,9 @@ async def send_test_email(request: Request):
         raise HTTPException(status_code=400, detail="Invalid email address")
 
     templates = _get_templates()
-    tmpl = templates.get(category) or templates.get("Generic") or {}
-    if not tmpl:
+    tmpl = templates.get(category) or {}
+    generic_tmpl = templates.get("Generic") or {}
+    if not tmpl and not generic_tmpl:
         raise HTTPException(status_code=400, detail=f"Template for category '{category}' not found")
 
     def _personalise(s: str) -> str:
@@ -465,8 +549,13 @@ async def send_test_email(request: Request):
                 .replace("{{company}}", company)
                 .replace("{{post_snippet}}", post_snippet))
 
-    subject = _personalise(tmpl.get("subject", "Test Email — Decision Pinnacle"))
-    email_body = _personalise(tmpl.get("body", ""))
+    # Fall back to Generic per-field, not per-category — a category can
+    # exist with a blank subject/body (not yet written), which would
+    # otherwise be sent to Brevo as-is and rejected with a 400.
+    subject_raw = tmpl.get("subject") or generic_tmpl.get("subject") or "Test Email — Decision Pinnacle"
+    body_raw = tmpl.get("body") or generic_tmpl.get("body") or ""
+    subject = _personalise(subject_raw)
+    email_body = _personalise(body_raw)
 
     from stages.brevo_sender import _send_one_sync_with_reply
     try:

@@ -14,17 +14,37 @@ _DAY_MAP = {
 
 
 def init(run_fn):
+    """Starts the scheduler. Defensive by design: this runs inside FastAPI's
+    lifespan at startup with nothing catching exceptions above it — an
+    unhandled error here (e.g. a missing IANA timezone database on a slim
+    Docker image, which raises zoneinfo.ZoneInfoNotFoundError) would crash
+    the ENTIRE app on boot, not just automation. requirements.txt now pins
+    `tzdata` to prevent that at the source, but this try/except is a second
+    layer: if scheduling ever fails for any reason, automation is simply
+    disabled (logged clearly) instead of taking the whole site down."""
     global _scheduler, _run_fn
     _run_fn = run_fn
-    _scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
-    _scheduler.start()
-    log.info("Scheduler started")
+    try:
+        _scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
+        _scheduler.start()
+        log.info("Scheduler started")
+    except Exception as e:
+        _scheduler = None
+        log.error(f"Scheduler failed to start — automation will be unavailable: {e}", exc_info=True)
 
 
 def update(automation_cfg: dict):
+    """Called both at startup and every time admin config is saved — must
+    never raise, or it would either crash startup (via lifespan) or break
+    the /api/admin/config save endpoint for unrelated settings changes."""
     if _scheduler is None:
         return
-    _scheduler.remove_all_jobs()
+    try:
+        _scheduler.remove_all_jobs()
+    except Exception as e:
+        log.error(f"Failed to clear existing scheduled jobs: {e}")
+        return
+
     if not automation_cfg.get("enabled"):
         log.info("Automation disabled — no jobs scheduled")
         return

@@ -120,3 +120,15 @@ def persistent_data_path(filename: str) -> Path:
             import shutil
             shutil.copy(bundled, persistent_path)
     return persistent_path
+
+
+def persistent_dir(name: str) -> Path:
+    """Directory for generated data (e.g. per-run logs) that has no bundled
+    default and must still survive redeploys. Same CONFIG_DIR mechanism as
+    persistent_data_path, just for a directory instead of a single seeded
+    file."""
+    config_dir = os.getenv("CONFIG_DIR", "")
+    base = Path(config_dir) if config_dir else Path(__file__).parent.parent
+    d = base / name
+    d.mkdir(parents=True, exist_ok=True)
+    return d

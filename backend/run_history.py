@@ -1,9 +1,10 @@
 import json
 import uuid
 from datetime import datetime
-from pathlib import Path
+from config import persistent_data_path, persistent_dir
 
-HISTORY_FILE = Path(__file__).parent.parent / "run_history.json"
+HISTORY_FILE = persistent_data_path("run_history.json")
+RUN_LOGS_DIR = persistent_dir("run_logs")
 
 
 def _load() -> list:
@@ -15,14 +16,45 @@ def _load() -> list:
     return []
 
 
-def append_run(data: dict) -> str:
+def _prune_orphaned_logs(current_runs: list[dict]) -> None:
+    """Keeps run_logs/ in sync with the trimmed 100-run history — deletes
+    log files for runs that fell off the list instead of growing forever."""
+    valid_ids = {r["id"] for r in current_runs if "id" in r}
+    try:
+        for f in RUN_LOGS_DIR.glob("*.json"):
+            if f.stem not in valid_ids:
+                f.unlink()
+    except Exception:
+        pass
+
+
+def append_run(data: dict, full_log: list[dict] | None = None) -> str:
     runs = _load()
     run_id = str(uuid.uuid4())[:8]
     entry = {"id": run_id, "timestamp": datetime.now().isoformat(), **data}
     runs.insert(0, entry)
-    HISTORY_FILE.write_text(json.dumps(runs[:100], indent=2))
+    runs = runs[:100]
+    HISTORY_FILE.write_text(json.dumps(runs, indent=2))
+
+    if full_log is not None:
+        try:
+            (RUN_LOGS_DIR / f"{run_id}.json").write_text(json.dumps(full_log, indent=2))
+        except Exception:
+            pass
+        _prune_orphaned_logs(runs)
+
     return run_id
 
 
 def get_all() -> list:
     return _load()
+
+
+def get_log(run_id: str) -> list[dict] | None:
+    log_path = RUN_LOGS_DIR / f"{run_id}.json"
+    if not log_path.exists():
+        return None
+    try:
+        return json.loads(log_path.read_text())
+    except Exception:
+        return None

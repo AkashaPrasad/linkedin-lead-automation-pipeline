@@ -19,8 +19,8 @@ SERVICE CATEGORIES
 1. "Growth" — performance marketing (Meta/Google/YouTube ads), marketplace and quick-commerce growth (Amazon, Flipkart, Myntra, Zepto, Blinkit), ROAS/funnel/conversion-focused asks, D2C scaling.
    Signals: "performance marketing", "ROAS", "paid ads", "Meta ads", "Google ads", "marketplace growth", "Amazon/Flipkart/Myntra/Zepto/Blinkit", "scale our D2C brand", "growth agency", "growth marketing".
 
-2. "Production" — making the physical/video creative asset itself: ad films, TVCs, photo shoots, video shoots, post-production.
-   Signals: "production house", "video production agency", "ad film", "TVC", "shoot", "photoshoot", "video production", "campaign film".
+2. "Production" — making the physical/video creative asset itself: ad films, TVCs, photo shoots, video shoots, post-production, AND AI-generated video/ad content (AI video generation, AI ad generation, text-to-video ad creation, AI avatar/UGC-style ad production) — these are content production too, not IT/software or out of domain.
+   Signals: "production house", "video production agency", "ad film", "TVC", "shoot", "photoshoot", "video production", "campaign film", "AI video generation", "AI ad generation", "AI-generated ads", "text-to-video", "AI avatar ads", "UGC-style AI ads".
 
 3. "Influencer Marketing" — influencer/creator partnerships, UGC, influencer campaigns.
    Signals: "influencer marketing agency", "influencer campaign", "creator partnership", "UGC content", "influencer collaboration", "creator-led campaign".

@@ -3,15 +3,19 @@ import re
 import json
 import requests
 from datetime import datetime
-from pathlib import Path
 from logger import get_logger
-from config import DAILY_EMAIL_CAP
+from config import DAILY_EMAIL_CAP, persistent_data_path
 
 log = get_logger("brevo")
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
-TEMPLATES_FILE = Path(__file__).parent.parent.parent / "templates.json"
+# Must match main.py's TEMPLATES_FILE exactly (persistent_data_path, not a
+# plain repo-root path) — otherwise, once CONFIG_DIR is set on a host like
+# Railway, template edits made through the Admin UI get written to the
+# persistent path while the actual send logic here would keep reading the
+# stale bundled-in-the-image version, so edits would silently never apply.
+TEMPLATES_FILE = persistent_data_path("templates.json")
 
 
 def _get_headers() -> dict:
@@ -68,15 +72,8 @@ def _load_templates() -> dict:
             return json.loads(TEMPLATES_FILE.read_text())
         except Exception:
             pass
-    from templates import growth, branding, creative, generic, marketplace
-    return {
-        "Beauty": {"subject": growth.SUBJECT, "body": growth.BODY},
-        "Apparel": {"subject": branding.SUBJECT, "body": branding.BODY},
-        "Kids": {"subject": creative.SUBJECT, "body": creative.BODY},
-        "Real Estate": {"subject": generic.SUBJECT, "body": generic.BODY},
-        "Generic": {"subject": generic.SUBJECT, "body": generic.BODY},
-        "FMCG": {"subject": marketplace.SUBJECT, "body": marketplace.BODY},
-    }
+    from templates import generic
+    return {"Generic": {"subject": generic.SUBJECT, "body": generic.BODY}}
 
 
 def _extract_company(headline: str) -> str:
@@ -167,9 +164,18 @@ async def run_brevo_sender(
         post_snippet = get_content(post)[:100].replace("\n", " ")
         category = post.get("_category", "Generic")
 
-        tmpl = templates.get(category) or templates.get("Generic") or {}
-        subject = _personalise(tmpl.get("subject", "Introduction — Decision Pinnacle"), first_name, company, post_snippet)
-        body = _personalise(tmpl.get("body", ""), first_name, company, post_snippet)
+        # Fall back to Generic per-field (not per-category) — a category
+        # can exist as a key with blank subject/body (e.g. a newly added
+        # category whose template hasn't been written yet), and templates.get(category)
+        # returns that truthy-but-empty dict, so `or templates.get("Generic")`
+        # never even runs. Checking subject/body individually prevents
+        # sending a blank subject to Brevo (which rejects it with a 400).
+        tmpl = templates.get(category) or {}
+        generic_tmpl = templates.get("Generic") or {}
+        subject_raw = tmpl.get("subject") or generic_tmpl.get("subject") or "Introduction — Decision Pinnacle"
+        body_raw = tmpl.get("body") or generic_tmpl.get("body") or ""
+        subject = _personalise(subject_raw, first_name, company, post_snippet)
+        body = _personalise(body_raw, first_name, company, post_snippet)
 
         if dry_run:
             post["_sent_status"] = "DRY_RUN"
