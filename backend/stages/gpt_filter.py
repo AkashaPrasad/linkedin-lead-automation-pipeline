@@ -9,12 +9,12 @@ log = get_logger("gpt_filter")
 _openai_client = None
 _gemini_model = None
 
-# Exactly 5 buckets — every skip MUST map to one of these so we can track the
+# Exactly 3 buckets — every skip MUST map to one of these so we can track the
 # AI's error rate / false-reject rate per reason instead of free-text noise.
+# Location is NOT a filter criterion — leads are accepted from any country,
+# regardless of where the requested agency or brand is based.
 SKIP_CATEGORIES = [
     "Not asking for an agency",
-    "Location outside Bangalore (India)",
-    "Outside India (non-design)",
     "Offline marketing only",
     "Out of domain",
 ]
@@ -29,12 +29,12 @@ IMPORTANT: AI-generated video/ad content creation (AI video generation, AI ad ge
 Decision Pinnacle is an AGENCY. It works with brands and businesses as a vendor/agency partner — not as an individual hire, and not as a partner to other agencies.
 
 YOUR JOB has two parts:
-A) Decide if this post is a genuine lead: a brand, business, or founder EXPLICITLY stating they are looking to hire or engage an AGENCY (not an individual, not an employee, not a freelancer, not another agency) for something inside Decision Pinnacle's domain.
-B) If you SKIP the post, classify WHY using exactly one of 5 fixed categories (below) — this is used to track the filter's accuracy over time, so be precise and consistent.
-C) Always give your best-guess COUNTRY for where the BRAND/BUSINESS in the post is based (not Decision Pinnacle). Use "India" if there's no signal either way (most posts are Indian brands) — only name another country if the post/author context clearly points there. Return null only if truly impossible to guess.
+A) Decide if this post is a genuine lead: a brand, business, or founder EXPLICITLY stating they are looking to hire or engage an AGENCY (not an individual, not an employee, not a freelancer, not another agency) for something inside Decision Pinnacle's domain. Leads are accepted from ANY country — do NOT reject or skip a post because the brand, author, or requested agency is based outside India, or restricts the search to a specific city/region. Location is never a reason to skip.
+B) If you SKIP the post, classify WHY using exactly one of 3 fixed categories (below) — this is used to track the filter's accuracy over time, so be precise and consistent.
+C) Give your best-guess COUNTRY for where the BRAND/BUSINESS in the post is based (not Decision Pinnacle), purely for informational logging — this has NO effect on whether the post is kept or skipped. Return null if impossible to guess.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ KEEP (is_real_lead: true) ONLY if the post EXPLICITLY asks for an AGENCY, for something in Decision Pinnacle's domain, and passes the location checks in section C below.
+✅ KEEP (is_real_lead: true) if the post EXPLICITLY asks for an AGENCY, for something in Decision Pinnacle's domain — regardless of the brand's or requested agency's location/country/city.
 
 The post must clearly say they are looking for one of these:
 → "digital marketing agency", "creative agency", "branding agency", "social media agency", "performance marketing agency", "content agency", "media agency", "advertising agency", "marketing partner", "agency partner", "marketplace agency", "growth agency", "production house", "web design/development agency", "logo/packaging design studio"
@@ -56,7 +56,9 @@ When genuinely unsure whether a borderline post counts as an explicit agency ask
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ❌ SKIP — every skip below MUST be tagged with exactly one skip_category from this list:
-  "Not asking for an agency" | "Location outside Bangalore (India)" | "Outside India (non-design)" | "Offline marketing only" | "Out of domain"
+  "Not asking for an agency" | "Offline marketing only" | "Out of domain"
+
+Location is NEVER a skip reason. Do not reject a post for being based outside India, restricting to a non-Bangalore city, or being a non-Indian brand.
 
 ────────────────────────────
 skip_category = "Not asking for an agency"
@@ -131,36 +133,24 @@ EXCEPTION — do NOT use "Out of domain" for AI-generated video/ad content: requ
 If unsure whether a service is in-domain, default to KEEP rather than this category — only use it when the requested agency type is clearly unrelated to marketing/creative/digital/PR/web-logo-packaging work.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-C) LOCATION CHECKS — apply these only AFTER confirming the post is otherwise a genuine in-domain agency lead:
-
-RULE 1 — skip_category = "Location outside Bangalore (India)":
-If the post EXPLICITLY restricts the search to agencies physically based in a specific Indian city/region OTHER than Bangalore/Bengaluru (e.g. "looking for Hyderabad-based agencies only", "Mumbai agencies only please", "need a Delhi NCR based agency", "only Pune agencies need apply") → SKIP.
-- If the post says "Bangalore/Bengaluru agencies", "PAN India", "remote-friendly", "anywhere in India", or doesn't restrict by city at all → this rule does NOT apply.
-
-RULE 2 — skip_category = "Outside India (non-design)":
-If the post or author context makes it clear the BRAND/BUSINESS itself is based outside India (e.g. "we are a US-based startup", "our brand in Dubai", "UK clothing brand") → SKIP, UNLESS the post specifically asks for website design/development, brand logo design, or packaging design (these can be sourced globally) — in that case this rule does NOT apply.
-
-RULE 3 — Default: if the post mentions no location restriction and no non-India business location at all, do NOT skip on location grounds.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 "Looking for a social media agency for our apparel brand" → explicitly wants agency, in-domain → KEEP
 "Hiring a social media manager" → individual hire → SKIP ("Not asking for an agency")
 "We need help with our marketing" → vague, no agency ask → SKIP ("Not asking for an agency")
 "Recommend a branding agency" → explicitly wants agency → KEEP
 "Looking for a freelance brand strategist" → individual → SKIP ("Not asking for an agency")
 "Our ROAS is poor" → no agency ask → SKIP ("Not asking for an agency")
-"Looking for Hyderabad-based agencies only for our F&B brand" → SKIP ("Location outside Bangalore (India)")
-"Our Dubai-based skincare brand needs a performance marketing agency" → SKIP ("Outside India (non-design)")
-"Our Dubai-based skincare brand needs a logo design studio" → KEEP (design exception applies)
+"Looking for Hyderabad-based agencies only for our F&B brand" → KEEP (location restriction is not a skip reason)
+"Our Dubai-based skincare brand needs a performance marketing agency" → KEEP (non-India brand is not a skip reason)
+"Our Dubai-based skincare brand needs a logo design studio" → KEEP
 "Looking for an agency to handle hoarding and pamphlet distribution for our store launch" → SKIP ("Offline marketing only")
 "Looking for a recruitment agency to hire our sales team" → SKIP ("Out of domain")
 
-When a post is a genuine in-domain agency ask and passes the location checks → KEEP. Otherwise SKIP with exactly one of the 5 skip_category values.
+When a post is a genuine in-domain agency ask → KEEP, regardless of location. Otherwise SKIP with exactly one of the 3 skip_category values.
 
 POST:
 {post_content}
 
-Return exactly this JSON shape (skip_category must be null when is_real_lead is true, and must be exactly one of the 5 listed values when false):
+Return exactly this JSON shape (skip_category must be null when is_real_lead is true, and must be exactly one of the 3 listed values when false):
 {{"is_real_lead": true/false, "skip_category": "Not asking for an agency" or null, "location_country": "India" or null, "reason": "one line"}}"""
 
 

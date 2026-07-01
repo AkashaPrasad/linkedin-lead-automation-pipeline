@@ -50,18 +50,26 @@ def _read_promotable_posts_sync(ws) -> list[dict]:
     its Sent Status — that includes DRY_RUN (already had an email) AND
     NO_EMAIL (never got an email because Apollo enrichment was off; this is
     exactly the case that needs Apollo now). Rows the AI/location filter
-    already skipped (Lead Status starts with "SKIPPED:") are left alone,
-    and anything already SENT or PROMOTED is never re-promoted."""
+    already skipped (Lead Status starts with "SKIPPED:") are left alone.
+
+    A row counts as "already resolved" (never re-promoted) if it has a Sent
+    Timestamp — every REAL lead gets one the moment its outcome is decided
+    (sent OR no_email, via email_decision.py/brevo_sender.py), whether that
+    happened in a real run or a previous promotion. An original, untouched
+    dry-run row never has a timestamp, so this cleanly distinguishes
+    "never promoted" from "already promoted" without needing an artificial
+    placeholder status like "PROMOTED" — the Sent Status column stays
+    exactly SENT / NO_EMAIL / FAILED, matching Master's own conventions."""
     all_vals = ws.get_all_values()
     if len(all_vals) <= 1:
         return []
     posts = []
     for i, row in enumerate(all_vals[1:], start=2):  # 1-indexed; row 1 is header
-        if len(row) <= COLUMNS["sent_status"]:
+        if len(row) <= COLUMNS["sent_timestamp"]:
             continue
-        sent_status = row[COLUMNS["sent_status"]].strip()
         lead_status = row[COLUMNS["lead_status"]].strip() if len(row) > COLUMNS["lead_status"] else ""
-        if lead_status != "REAL" or sent_status in ("SENT", "PROMOTED"):
+        sent_timestamp = row[COLUMNS["sent_timestamp"]].strip()
+        if lead_status != "REAL" or sent_timestamp:
             continue
         posts.append(_row_to_post(row, i))
     return posts
@@ -91,11 +99,20 @@ def count_promotable_sync(tab_name: str) -> dict:
     }
 
 
-def _mark_promoted_sync(ws, row_indices: list[int]):
-    """Marks the source dry-run rows as PROMOTED so this tab is never
-    accidentally promoted twice. Only touches the Sent Status column."""
-    col_letter = chr(ord("A") + COLUMNS["sent_status"])
-    updates = [{"range": f"{col_letter}{i}", "values": [["PROMOTED"]]} for i in row_indices]
+def _write_back_final_status_sync(ws, posts: list[dict]):
+    """Writes each row's TRUE final outcome (SENT / NO_EMAIL / FAILED, plus
+    its resolution timestamp) back into the original dry-run row — not a
+    generic "PROMOTED" placeholder that would hide which leads actually
+    got emailed vs which had no email found. The timestamp alone is what
+    prevents re-promotion (see _read_promotable_posts_sync)."""
+    sent_status_col = chr(ord("A") + COLUMNS["sent_status"])
+    updates = []
+    for p in posts:
+        row = p["_dry_row_index"]
+        updates.append({
+            "range": f"{sent_status_col}{row}:{chr(ord('A') + COLUMNS['sent_timestamp'])}{row}",
+            "values": [[p.get("_sent_status") or "NO_EMAIL", p.get("_sent_timestamp") or ""]],
+        })
     if updates:
         for chunk in [updates[i:i + 50] for i in range(0, len(updates), 50)]:
             ws.batch_update(chunk, value_input_option="RAW")
@@ -142,6 +159,8 @@ async def promote_dry_run_async(emit, tab_name: str) -> None:
         cfg, False, stats, pipeline_start,
     )
 
-    row_indices = [p["_dry_row_index"] for p in real_posts]
-    await asyncio.to_thread(_mark_promoted_sync, dry_ws, row_indices)
-    log.info(f"Marked {len(row_indices)} rows as PROMOTED in '{tab_name}'")
+    # real_posts and all_posts share the same underlying post dicts, so by
+    # this point real_posts already carries each post's true final
+    # _sent_status/_sent_timestamp from Stages 6-9 having mutated them in place.
+    await asyncio.to_thread(_write_back_final_status_sync, dry_ws, real_posts)
+    log.info(f"Wrote back final status for {len(real_posts)} rows in '{tab_name}'")

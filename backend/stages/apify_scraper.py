@@ -45,11 +45,35 @@ _POSTED_LIMIT_HOURS = {
 }
 
 
+def _compute_scrape_until_date(posted_limit: str) -> str | None:
+    """Day-granularity cutoff (YYYY-MM-DD) for the actor's scrapeUntilDate
+    input — this makes the actor STOP SCRAPING once it reaches posts older
+    than this date, so old posts are never even extracted, instead of being
+    pulled and discarded afterward. Coarser than the hour-precise
+    _filter_by_actual_date() safety net that still runs afterward, but this
+    is what actually saves scrape time/compute by cutting extraction short."""
+    import math
+    hours = _POSTED_LIMIT_HOURS.get(posted_limit)
+    if hours is None:
+        return None
+    days = max(1, math.ceil(hours / 24))
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
+    return cutoff_date.strftime("%Y-%m-%d")
+
+
 def _build_search_url(query: str, posted_limit: str) -> str:
     params = {"keywords": query, "origin": "GLOBAL_SEARCH_HEADER"}
     date_posted = _DATE_POSTED_MAP.get(posted_limit)
     if date_posted:
         params["datePosted"] = date_posted
+    # Sort by newest-first — required by the actor for scrapeUntilDate to
+    # work at all, and independently important on its own: without an
+    # explicit sort, LinkedIn defaults to relevance ranking, which can
+    # surface an old-but-highly-relevant post ahead of fresher ones even
+    # within a date-restricted bucket. This was very likely a contributing
+    # cause of a stale post reaching the pipeline despite a tight window.
+    if posted_limit != "any":
+        params["sortBy"] = '"date_posted"'
     return "https://www.linkedin.com/search/results/content/?" + urllib.parse.urlencode(params)
 
 
@@ -83,7 +107,7 @@ def _build_cookie_run_input(cfg: dict, query: str) -> dict:
             "scraping.use_cookie_actor is enabled but LINKEDIN_COOKIE is not configured"
         )
     cookie_array = _parse_cookie_export(cookie_raw)
-    return {
+    run_input = {
         "urls": [_build_search_url(query, posted_limit)],
         "cookie": cookie_array,
         "userAgent": _COOKIE_ACTOR_USER_AGENT,
@@ -91,6 +115,10 @@ def _build_cookie_run_input(cfg: dict, query: str) -> dict:
         "limitPerSource": scraping.get("max_posts_per_query", 50),
         "deepScrape": False,
     }
+    scrape_until = _compute_scrape_until_date(posted_limit)
+    if scrape_until:
+        run_input["scrapeUntilDate"] = scrape_until
+    return run_input
 
 
 def _build_run_input(cfg: dict, query: str) -> dict:

@@ -6,7 +6,6 @@ from stages.alerts import send_alert
 from stages.apify_scraper import run_apify
 from stages.deduplication import run_deduplication
 from stages.gpt_filter import run_gpt_filter
-from stages.location_filter import apply_location_filter
 from stages.gpt_classify import run_gpt_classify
 from stages.repeat_lead_filter import check_repeat_leads
 from stages.sheets_writer import open_sheets, run_sheets_writer, finalize_sheet_columns
@@ -195,17 +194,7 @@ async def run_pipeline_async(emit):
             await emit({"event": "stage_complete", "stage": 3, "name": "GPT Filter",
                         "metric": f"Skipped (disabled) — {len(real_posts)} passed"})
 
-        # Location filter — only re-checks posts the AI already marked real.
-        # Failures move to skipped_posts under "Skipped based on location"
-        # instead of being dropped; they still land in the sheet.
-        real_posts, location_rejected, location_stats = apply_location_filter(real_posts)
-        skipped_posts = skipped_posts + location_rejected
-        location_rejected_count = location_stats["rejected_no_india"] + location_stats["rejected_agency"]
-        if location_stats["total"]:
-            await send_alert(
-                f"✅ Location filter — {location_stats['passed']} stayed real, "
-                f"{location_rejected_count} skipped based on location"
-            )
+        ai_filter_kept = len(real_posts)
 
         if filtering.get("only_posts_with_email"):
             real_posts = [p for p in real_posts if p.get("_email_in_post")]
@@ -242,6 +231,18 @@ async def run_pipeline_async(emit):
             )
         stats["real"] = len(real_posts)
         await emit({"event": "stats", **stats})
+
+        # Full funnel in one line — every stage that can shrink the real-lead
+        # count is summarized here, so "N kept" from an earlier stage never
+        # looks inconsistent with the sheet's final real-lead total again.
+        await emit({
+            "event": "progress",
+            "stage": 4,
+            "message": (
+                f"Funnel: {ai_filter_kept} AI-kept → "
+                f"{len(real_posts)} final real leads (after repeat-lead dedup)"
+            ),
+        })
 
         if not real_posts:
             await run_sheets_writer([], skipped_posts, sh, emit, dry_run=dry_run)

@@ -97,8 +97,9 @@ async def check_repeat_leads(real_posts: list[dict], master_ws, emit) -> tuple[l
             "event": "progress",
             "stage": 4,
             "message": (
-                f"Repeat lead check: {new_author_count} new, {repeat_new_ask_count} repeat "
-                f"contacts with a new ask, {duplicate_ask_count} duplicate asks held back"
+                f"Repeat lead check: {stats['total']} checked — {new_author_count} new, "
+                f"{repeat_new_ask_count} repeat contacts with a new ask, "
+                f"{duplicate_ask_count} duplicate asks held back"
             ),
         })
     log.info(

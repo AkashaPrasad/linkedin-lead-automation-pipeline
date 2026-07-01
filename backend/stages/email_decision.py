@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from logger import get_logger
 
 log = get_logger("email_decision")
@@ -26,6 +27,11 @@ async def run_email_decision(posts: list[dict], emit) -> list[dict]:
             post["_final_email"] = None
             post["_has_email"] = "NO"
             post["_sent_status"] = "NO_EMAIL"
+            # Stamp a resolution timestamp here too, not just on SENT — every
+            # REAL lead should end up with a definitive terminal status
+            # (sent or no_email) and a record of when that was decided,
+            # rather than only successful sends being timestamped.
+            post["_sent_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             no_email += 1
 
     await emit({
