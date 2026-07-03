@@ -12,6 +12,7 @@ from stages.sheets_writer import open_sheets, run_sheets_writer, finalize_sheet_
 from stages.apollo_enricher import run_apollo_enricher
 from stages.email_decision import run_email_decision
 from stages.brevo_sender import run_brevo_sender
+from stages.manual_leads import sync_sent_to_master, append_manual_leads
 import checkpoint as cp
 
 log = get_logger("pipeline")
@@ -114,8 +115,16 @@ async def _run_stages_6_to_9(
     # nothing skipped, nothing real-but-no-email. See append_sent_to_master.
     master_sent_count = await append_sent_to_master(master_ws, real_posts)
 
+    # Real leads that never got an email (Apollo + post both came up empty,
+    # or the send itself failed) still deserve outreach — via a manual
+    # LinkedIn DM. Written to a separate sheet for a human to work through;
+    # never done for dry runs, matching Master's own real-sends-only rule.
+    manual_count = 0
+    if not dry_run:
+        manual_count = await append_manual_leads(real_posts, emit)
+
     await emit({"event": "stage_complete", "stage": 9, "name": "Finalize Sheets",
-                "metric": f"Sheet updated — {master_sent_count} SENT leads added to Master"})
+                "metric": f"Sheet updated — {master_sent_count} SENT leads added to Master, {manual_count} to Manual Leads"})
 
     # All done — clear checkpoint
     cp.clear()
@@ -162,6 +171,25 @@ async def run_pipeline_async(emit):
     stats = {"scraped": 0, "real": 0, "enriched": 0, "sent": 0}
 
     try:
+        # ── Open Sheets (moved ahead of Stage 1 so the manual-leads sync
+        # below can run before any scraping starts) ────────────────────
+        sh = await open_sheets(emit)
+        try:
+            master_ws_tmp = await asyncio.to_thread(sh.worksheet, "Master")
+        except Exception:
+            from stages.sheets_writer import HEADERS as _HEADERS
+            master_ws_tmp = await asyncio.to_thread(
+                lambda: sh.add_worksheet(title="Master", rows=2000, cols=len(_HEADERS))
+            )
+
+        # Before every real run: pull in any lead a human has marked "Sent"
+        # in the Manual Leads (LinkedIn DM) sheet since the last run, and
+        # record it in Master — exactly like a successful email send. Never
+        # blocks the run itself if the manual sheet is unreachable.
+        synced = await sync_sent_to_master(master_ws_tmp, emit)
+        if synced:
+            await send_alert(f"✅ Synced {synced} manually-sent LinkedIn DM leads to Master")
+
         # ── Stage 1: Apify ─────────────────────────────────────────────
         posts = await run_apify(emit, cfg)
         stats["scraped"] = len(posts)
@@ -177,16 +205,6 @@ async def run_pipeline_async(emit):
             ]
             if before != len(posts):
                 log.info(f"Excluded keyword filter removed {before - len(posts)} posts")
-
-        # ── Open Sheets ────────────────────────────────────────────────
-        sh = await open_sheets(emit)
-        try:
-            master_ws_tmp = await asyncio.to_thread(sh.worksheet, "Master")
-        except Exception:
-            from stages.sheets_writer import HEADERS as _HEADERS
-            master_ws_tmp = await asyncio.to_thread(
-                lambda: sh.add_worksheet(title="Master", rows=2000, cols=len(_HEADERS))
-            )
 
         # ── Stage 2: Deduplication ───────────────────────────────────────
         new_posts = await run_deduplication(posts, master_ws_tmp, emit)

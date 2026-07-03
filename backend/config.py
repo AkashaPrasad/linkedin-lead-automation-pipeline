@@ -20,6 +20,12 @@ BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "Decision Pinnacle")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
 
+# Separate spreadsheet for real leads that got NO_EMAIL — these need a manual
+# LinkedIn DM instead of an automated email. Optional: if unset, the pipeline
+# just skips this feature (logged as a warning, never a hard failure) rather
+# than blocking real runs over a nice-to-have.
+MANUAL_LEADS_SHEET_ID = os.getenv("MANUAL_LEADS_SHEET_ID", "")
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
