@@ -132,7 +132,16 @@ async def run_brevo_sender(
     capped = False
     auth_failed = False
 
-    sendable = [p for p in posts if p.get("_final_email") and p.get("_lead_status", "REAL") == "REAL"]
+    # not post.get("_sent_status") is an idempotency guard: if this exact
+    # post already has a resolved status (e.g. because a prior attempt at
+    # this run got through Brevo but then crashed before the checkpoint
+    # could be updated, and the run was resumed from the stale pre-send
+    # checkpoint), it must NOT be sent again — without this, a resumed run
+    # would email the same real person a second time.
+    sendable = [
+        p for p in posts
+        if p.get("_final_email") and p.get("_lead_status", "REAL") == "REAL" and not p.get("_sent_status")
+    ]
 
     # For a REAL (non-dry) lead, the Sent Status column must only ever show
     # exactly "SENT" or "NO_EMAIL" — never CAPPED/FAILED/SKIPPED_* internal

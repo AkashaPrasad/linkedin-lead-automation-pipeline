@@ -5,19 +5,18 @@ from post_fields import get_author_url
 log = get_logger("repeat_lead")
 
 
-# Only these represent an ACTUAL resolved contact attempt — a post that
-# reached Stage 6+ and got a real outcome (sent, confirmed no email, or a
-# concrete send failure). "PENDING" is explicitly excluded: every post the
-# AI filter skips at Stage 3 never reaches classify, so it's written to
-# Master with a default Category of "Generic" and Sent Status "PENDING" —
-# without this exclusion, ANY skipped post would wrongly count as "already
-# contacted for Generic" and could block a real, unrelated future lead from
-# the same author. "DRY_RUN" is excluded for the same reason it always was
-# — a dry run never actually contacts anyone.
-_RESOLVED_SENT_STATUSES = {
-    "SENT", "NO_EMAIL", "FAILED", "CAPPED",
-    "SKIPPED_INVALID_EMAIL", "SKIPPED_EXCLUDED_DOMAIN", "SKIPPED_AUTH_FAILURE",
-}
+# Only "SENT" represents an ACTUAL successful contact — Master now only
+# ever receives rows for leads that were truly emailed (see
+# stages/sheets_writer.py: append_sent_to_master), so any row present here
+# is SENT by construction. Checking for exactly this one status (rather
+# than also treating NO_EMAIL/FAILED/CAPPED/etc. as "contacted") is what
+# fixes the bug where a lead we never actually emailed — because no email
+# was found, or the send failed — would otherwise wrongly block a genuine
+# future outreach attempt to the same author. Kept as an explicit set
+# (not a bare string) so any legacy row still sitting in Master from before
+# this fix (e.g. an old NO_EMAIL/PENDING row) is correctly never treated as
+# "already contacted" either.
+_RESOLVED_SENT_STATUSES = {"SENT"}
 
 
 def _get_contacted_categories_sync(worksheet) -> dict:

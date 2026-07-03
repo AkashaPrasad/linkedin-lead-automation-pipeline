@@ -8,7 +8,7 @@ from stages.deduplication import run_deduplication
 from stages.gpt_filter import run_gpt_filter
 from stages.gpt_classify import run_gpt_classify
 from stages.repeat_lead_filter import check_repeat_leads
-from stages.sheets_writer import open_sheets, run_sheets_writer, finalize_sheet_columns
+from stages.sheets_writer import open_sheets, run_sheets_writer, finalize_sheet_columns, append_sent_to_master
 from stages.apollo_enricher import run_apollo_enricher
 from stages.email_decision import run_email_decision
 from stages.brevo_sender import run_brevo_sender
@@ -90,12 +90,32 @@ async def _run_stages_6_to_9(
     stats["sent"] = send_result["sent"]
     await emit({"event": "stats", **stats})
 
+    # Checkpoint immediately after Brevo actually sends — real_posts now
+    # carries each post's true _sent_status ("SENT"/"NO_EMAIL"). If Stage 9
+    # below fails (e.g. a transient Sheets API error) and the run is later
+    # resumed, this is what stops brevo_sender's idempotency guard from
+    # ever re-sending an email that already went out.
+    cp.save(8, {
+        "real_posts": real_posts,
+        "master_start_row": master_start_row,
+        "daily_start_row": daily_start_row,
+        "daily_tab": daily_ws.title,
+        "dry_run": dry_run,
+        "stats": stats.copy(),
+        "cfg": cfg,
+    })
+
     # ── Stage 9: Finalize Sheets ───────────────────────────────────────
     await emit({"event": "stage_start", "stage": 9, "name": "Finalize Sheets",
                 "message": "Writing final email and send statuses back to Sheets..."})
-    await finalize_sheet_columns(master_ws, daily_ws, real_posts, master_start_row, daily_start_row)
+    await finalize_sheet_columns(daily_ws, real_posts, daily_start_row)
+
+    # Master only ever receives leads Stage 8 actually SENT an email to —
+    # nothing skipped, nothing real-but-no-email. See append_sent_to_master.
+    master_sent_count = await append_sent_to_master(master_ws, real_posts)
+
     await emit({"event": "stage_complete", "stage": 9, "name": "Finalize Sheets",
-                "metric": "Sheet updated"})
+                "metric": f"Sheet updated — {master_sent_count} SENT leads added to Master"})
 
     # All done — clear checkpoint
     cp.clear()
@@ -268,12 +288,18 @@ async def run_pipeline_async(emit):
         await send_alert(f"✅ Stage 5 done — {len(all_posts)} rows written to Sheets")
         real_posts = all_posts[:len(real_posts)]
 
-        # Checkpoint after Stage 5 — Sheets written, has tab/row info
+        # Checkpoint after Stage 5 — Sheets written, has tab/row info.
+        # daily_ws.title is the ACTUAL tab name Stage 5 just wrote to — not
+        # a re-read of the previous (Stage 4) checkpoint, which never had
+        # this key and would silently save an empty string here. An empty
+        # daily_tab on a later resume makes resume_pipeline_async fall back
+        # to using Master itself as the "daily" worksheet, corrupting real
+        # Master rows with Stage 9 finalize writes aimed at the wrong tab.
         cp.save(5, {
             "real_posts": real_posts,
             "master_start_row": master_start_row,
             "daily_start_row": daily_start_row,
-            "daily_tab": cp.load().get("daily_tab", "") if cp.exists() else "",
+            "daily_tab": daily_ws.title,
             "dry_run": dry_run,
             "stats": stats.copy(),
             "cfg": cfg,
@@ -345,6 +371,7 @@ async def resume_pipeline_async(emit):
                 "real_posts": real_posts,
                 "master_start_row": master_start_row,
                 "daily_start_row": daily_start_row,
+                "daily_tab": daily_ws.title,
                 "dry_run": dry_run,
                 "stats": stats.copy(),
                 "cfg": cfg,
@@ -356,9 +383,7 @@ async def resume_pipeline_async(emit):
             master_start_row = state.get("master_start_row")
             daily_start_row = state.get("daily_start_row", 2)
 
-            master_ws = await asyncio.to_thread(
-                lambda: sh.worksheet("Master") if not dry_run else sh.worksheets()[0]
-            )
+            master_ws = await asyncio.to_thread(sh.worksheet, "Master")
             if daily_tab:
                 try:
                     daily_ws = await asyncio.to_thread(sh.worksheet, daily_tab)

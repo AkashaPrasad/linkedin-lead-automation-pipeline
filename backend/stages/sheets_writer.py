@@ -173,19 +173,23 @@ async def run_sheets_writer(
     """
     Returns: (master_ws, daily_ws, all_posts, master_start_row, daily_start_row)
 
-    master_start_row is None when dry_run=True (nothing written to Master).
+    Master is NEVER written here — only truly SENT leads get appended to
+    Master, and only after Stage 8 (Brevo) has confirmed the send (see
+    append_sent_to_master below). Writing skipped/no-email/pending leads to
+    Master would make it look like we'd "contacted" someone we never
+    actually emailed, which both pollutes the sheet and causes
+    repeat_lead_filter.py to wrongly treat them as already-contacted,
+    silently blocking a real future outreach attempt. master_start_row is
+    therefore always None — the daily tab still gets every row (real +
+    skipped) for full audit visibility.
     daily_start_row is the 1-indexed row where the new real_posts begin in the daily tab.
     """
     today = datetime.now().strftime("%d-%b-%Y")
 
-    if dry_run:
-        daily_tab = f"[DRY] {today}"
-        await emit({"event": "stage_start", "stage": 5, "name": "Google Sheets",
-                    "message": f"[DRY RUN] Writing to '{daily_tab}' only — Master sheet untouched..."})
-    else:
-        daily_tab = today
-        await emit({"event": "stage_start", "stage": 5, "name": "Google Sheets",
-                    "message": f"Writing leads to Master + '{daily_tab}'..."})
+    daily_tab = f"[DRY] {today}" if dry_run else today
+    mode_msg = "[DRY RUN] " if dry_run else ""
+    await emit({"event": "stage_start", "stage": 5, "name": "Google Sheets",
+                "message": f"{mode_msg}Writing leads to '{daily_tab}'..."})
 
     daily_ws = await asyncio.to_thread(_ensure_worksheet_sync, sh, daily_tab)
     # Get existing row count BEFORE appending so we know where new rows start
@@ -195,37 +199,72 @@ async def run_sheets_writer(
     rows = [_post_to_row(p) for p in all_posts]
 
     master_ws = await asyncio.to_thread(_ensure_worksheet_sync, sh, "Master")
-    master_existing = await asyncio.to_thread(_ensure_headers_sync, master_ws)
-
-    master_start_row: int | None = None
+    await asyncio.to_thread(_ensure_headers_sync, master_ws)
 
     if rows:
         await asyncio.to_thread(_batch_append_sync, daily_ws, rows)
         # daily_start_row = first row of the REAL posts in the daily tab (1-indexed)
         daily_start_row = daily_existing + 1
-
-        if not dry_run:
-            await asyncio.to_thread(_batch_append_sync, master_ws, rows)
-            master_start_row = master_existing + 1
     else:
         daily_start_row = daily_existing + 1
 
-    mode = "[DRY RUN] " if dry_run else ""
     await emit({
         "event": "stage_complete",
         "stage": 5,
         "name": "Google Sheets",
-        "metric": f"{mode}{len(rows)} rows → '{daily_tab}'" + ("" if dry_run else " + Master"),
+        "metric": f"{mode_msg}{len(rows)} rows → '{daily_tab}'",
         "rows_written": len(rows),
     })
-    log.info(f"STAGE 5 | Sheets: {len(rows)} rows → '{daily_tab}'" + ("" if dry_run else " + Master"))
-    return master_ws, daily_ws, all_posts, master_start_row, daily_start_row
+    log.info(f"STAGE 5 | Sheets: {len(rows)} rows → '{daily_tab}' (Master untouched until Stage 8 confirms sends)")
+    return master_ws, daily_ws, all_posts, None, daily_start_row
 
 
-async def finalize_sheet_columns(master_ws, daily_ws, real_posts: list[dict],
-                                  master_start_row: int | None, daily_start_row: int):
-    """Update columns H–P with final Apollo/email/send data for real_posts only."""
+async def finalize_sheet_columns(daily_ws, real_posts: list[dict], daily_start_row: int):
+    """Update columns L–T with final Apollo/email/send data for real_posts, in the daily tab."""
     if real_posts:
         await asyncio.to_thread(_update_columns_sync, daily_ws, real_posts, daily_start_row)
-        if master_start_row is not None:
-            await asyncio.to_thread(_update_columns_sync, master_ws, real_posts, master_start_row)
+
+
+def _post_to_master_row(post: dict) -> list:
+    """Builds a Master row for a lead that Stage 8 (Brevo) has already
+    confirmed was actually SENT — every column is filled with its final
+    value in one shot, since Apollo/email-decision/Brevo have all already
+    run by the time this is called. Unlike _post_to_row, nothing here is
+    a placeholder to be patched in later."""
+    from post_fields import get_content, get_post_url, get_author_name, get_author_url, get_author_headline, get_posted_date
+    return [
+        get_content(post),
+        get_post_url(post),
+        get_author_name(post),
+        get_author_url(post),
+        post.get("_location_country") or "",
+        get_author_headline(post),
+        post.get("_company_name") or "",
+        get_posted_date(post),
+        post.get("_search_query") or "",
+        post.get("_email_in_post") or "",
+        post.get("_contact_method") or "",
+        post.get("_apollo_email") or "",
+        post.get("_final_email") or "",
+        post.get("_has_email") or "NO",
+        post.get("_category") or "Generic",
+        post.get("_lead_status") or "REAL",
+        post.get("_template_sent") or "",
+        post.get("_sent_status") or "SENT",
+        post.get("_sent_timestamp") or "",
+        post.get("_error") or "",
+        post.get("_repeat_lead") or "No",
+    ]
+
+
+async def append_sent_to_master(master_ws, posts: list[dict]) -> int:
+    """Appends ONLY the posts Stage 8 actually sent an email for to Master.
+    This is the sole path by which a row ever lands in Master — nothing
+    skipped, and nothing real-but-no-email, ever gets written here."""
+    sent_posts = [p for p in posts if p.get("_sent_status") == "SENT"]
+    if not sent_posts:
+        return 0
+    rows = [_post_to_master_row(p) for p in sent_posts]
+    await asyncio.to_thread(_batch_append_sync, master_ws, rows)
+    log.info(f"Master: appended {len(rows)} SENT leads")
+    return len(rows)
