@@ -9,7 +9,7 @@ log = get_logger("gpt_filter")
 _openai_client = None
 _gemini_model = None
 
-# Exactly 3 buckets — every skip MUST map to one of these so we can track the
+# Exactly 4 buckets — every skip MUST map to one of these so we can track the
 # AI's error rate / false-reject rate per reason instead of free-text noise.
 # Location is NOT a filter criterion — leads are accepted from any country,
 # regardless of where the requested agency or brand is based.
@@ -17,6 +17,7 @@ SKIP_CATEGORIES = [
     "Not asking for an agency",
     "Offline marketing only",
     "Out of domain",
+    "Non-English Post",
 ]
 DEFAULT_SKIP_CATEGORY = "Not asking for an agency"
 
@@ -28,13 +29,20 @@ IMPORTANT: AI-generated video/ad content creation (AI video generation, AI ad ge
 
 Decision Pinnacle is an AGENCY. It works with brands and businesses as a vendor/agency partner — not as an individual hire, and not as a partner to other agencies.
 
-YOUR JOB has two parts:
+Evaluate in this ORDER — each gate is checked before moving to the next, and failing an earlier gate means you SKIP immediately without needing to evaluate the later ones:
+
+GATE 0 — LANGUAGE (check this FIRST, before anything else):
+The post must be PRIMARILY written in English. This gate is about REJECTING posts written mainly in a non-English language (native script OR full Latin-transliteration) — it is NOT about rejecting normal Indian English, which very commonly mixes in a handful of Hindi/vernacular words (e.g. "bahut accha", "jaldi", "thoda", "bhai", "yaar") while remaining structurally and predominantly English. This kind of light code-mixing is completely normal Indian English and must be KEPT (evaluated normally) — it is NOT a reason to skip.
+- Only SKIP with "Non-English Post" if entire SENTENCES or the majority of the post's words are in a non-English language — e.g. "हमें एक मार्केटिंग एजेंसी चाहिए" or "Humein ek marketing agency chahiye jo hamare brand ko grow kar sake" (the whole sentence structure is non-English, not just a word or two).
+- A post like "We need a bahut accha performance marketing agency for our D2C brand, please DM your portfolio" is over 90% English with only ONE Hindi adjective inserted — this is normal Indian English and MUST NOT be skipped for language. When in doubt between "a few non-English words mixed into an English sentence" vs "a genuinely non-English sentence" — lean toward KEEP (evaluate normally), only skip for clear-cut cases where whole sentences are in another language.
+
+YOUR JOB (after Gate 0 passes) has two parts:
 A) Decide if this post is a genuine lead: a brand, business, or founder EXPLICITLY stating they are looking to hire or engage an AGENCY (not an individual, not an employee, not a freelancer, not another agency) for something inside Decision Pinnacle's domain. Leads are accepted from ANY country — do NOT reject or skip a post because the brand, author, or requested agency is based outside India, or restricts the search to a specific city/region. Location is never a reason to skip.
-B) If you SKIP the post, classify WHY using exactly one of 3 fixed categories (below) — this is used to track the filter's accuracy over time, so be precise and consistent.
+B) If you SKIP the post, classify WHY using exactly one of 4 fixed categories (below) — this is used to track the filter's accuracy over time, so be precise and consistent.
 C) Give your best-guess COUNTRY for where the BRAND/BUSINESS in the post is based (not Decision Pinnacle), purely for informational logging — this has NO effect on whether the post is kept or skipped. Return null if impossible to guess.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ KEEP (is_real_lead: true) if the post EXPLICITLY asks for an AGENCY, for something in Decision Pinnacle's domain — regardless of the brand's or requested agency's location/country/city.
+✅ KEEP (is_real_lead: true) if the post PASSES Gate 0 (English) AND EXPLICITLY asks for an AGENCY, for something in Decision Pinnacle's domain — regardless of the brand's or requested agency's location/country/city.
 
 The post must clearly say they are looking for one of these:
 → "digital marketing agency", "creative agency", "branding agency", "social media agency", "performance marketing agency", "content agency", "media agency", "advertising agency", "marketing partner", "agency partner", "marketplace agency", "growth agency", "production house", "web design/development agency", "logo/packaging design studio"
@@ -56,7 +64,7 @@ When genuinely unsure whether a borderline post counts as an explicit agency ask
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ❌ SKIP — every skip below MUST be tagged with exactly one skip_category from this list:
-  "Not asking for an agency" | "Offline marketing only" | "Out of domain"
+  "Not asking for an agency" | "Offline marketing only" | "Out of domain" | "Non-English Post"
 
 Location is NEVER a skip reason. Do not reject a post for being based outside India, restricting to a non-Bangalore city, or being a non-Indian brand.
 
@@ -74,16 +82,27 @@ THOUGHT LEADERSHIP & OPINIONS (no matter how relevant the topic):
 • Tips, frameworks, opinions, or commentary about marketing/branding/D2C → SKIP
 • "Here's why most D2C brands fail at marketing", "5 things I learned about brand building", industry news/trend posts → SKIP
 
-COMPETITOR AGENCY SELF-PROMOTION (very common):
-Any post where a marketing/creative/social/branding/performance/lead-gen/web-dev agency is promoting ITSELF to find clients → SKIP.
-• "At [Agency Name], we help businesses with X, Y, Z" → SKIP
-• Post lists services like ✅ Performance Marketing ✅ Social Media ✅ Branding → agency ad → SKIP
-• "Looking for a digital marketing agency? Contact us / We are here / Call us" — agency pretending to be the answer to its own bait question → SKIP
-• Hashtags like #DigitalMarketingAgency #SocialMediaAgency #MarketingAgencyDelhi → SKIP
-• The author themselves IS the agency offering the service — they are pitching, not buying → SKIP
-• This applies in any language (Malayalam, Hindi, Tamil, English, etc.)
-NOTE: a phone number or website alone does NOT make a post a skip — only skip if the overall post is clearly an agency advertising itself.
-Real examples to SKIP: "At Yashi Associates, we help brands grow with digital marketing..." / "JKS Digital helps businesses grow. Call 8860336294. #DigitalMarketingAgency" / "Brixads helps businesses across Kerala with branding. Call 9744400414"
+COMPETITOR AGENCY SELF-PROMOTION — CHECK THIS EXTREMELY CAREFULLY, this is the single most common false-positive:
+Any post where a marketing/creative/social/branding/performance/lead-gen/web-dev/production/influencer agency, studio, freelancer collective, or consultant is promoting ITSELF, its own services, or its own team to attract clients → SKIP. This is an AD, not a lead, no matter how it's phrased.
+
+THE CORE TEST — ask this explicitly before deciding KEEP: "Is the AUTHOR the party OFFERING the service, or the party WANTING to HIRE for the service?" If the author (or "we"/"our team"/the company named in the post) is describing services THEY provide, deliverables THEY produce, or a team THEY run — SKIP, regardless of how the post is worded or what call-to-action it uses. Only KEEP if the author is clearly the BRAND/CLIENT side, actively wanting to pay someone else to do the work.
+
+Signals that STRONGLY indicate self-promotion (any ONE of these is usually enough to SKIP):
+• First-person service descriptions: "we offer", "we provide", "we specialize in", "our services include", "we help brands/businesses with", "our team at [Company]", "we've worked with", "we've helped X+ brands/clients"
+• Credibility/portfolio flexing: "10+ years of experience", "we've delivered X campaigns", "check out our portfolio", "case studies attached", "here's what we've built for our clients"
+• Direct-to-contact CTAs aimed at the reader becoming a customer: "DM us to know more", "book a free consultation", "get in touch today", "visit our website", "drop a comment to get a free audit", "slide into our DMs"
+• REVERSE-FRAMED bait posts — an agency describing itself as if it were hiring, to attract clients instead of applicants: "Looking for brands to work with", "Taking on 2 new clients this month", "Open slots for Q3 — DM if you want to scale your brand", "We're onboarding 3 new D2C brands this quarter" → these all describe the AUTHOR as the SERVICE PROVIDER dressed up as a hiring post — SKIP, this is still self-promotion, not a brand seeking an agency.
+• Listing their own service menu with checkmarks/emoji bullets (✅🔹📌) describing what THEY do: "✅ Performance Marketing ✅ Social Media ✅ Branding" as a pitch of their own capabilities → SKIP
+• Stacked agency-style SEO hashtags at the end used to advertise their own listing: #DigitalMarketingAgency #SocialMediaAgencyDelhi #BrandingAgency #PerformanceMarketingAgency → SKIP
+• "Looking for a [type] agency? [We are/Contact us/We're here]" — agency baiting with the exact question a real client would ask, then answering it with itself → SKIP
+• Any post promoting a "white-label", "reseller", "referral partner", or "sub-vendor" program for the author's own agency services → SKIP (this is the agency recruiting resellers of ITS OWN services, not hiring one)
+• This applies in ANY language the post happens to be in — this check runs independently of Gate 0, though a non-English self-promo post would already be caught there first.
+
+Do NOT be fooled by superficially "buyer-sounding" language — many agencies deliberately phrase self-promotion to mimic a genuine client post (this is a known LinkedIn growth tactic). Always run THE CORE TEST above rather than pattern-matching on phrases like "looking for" alone — "looking for" appears in both real client asks AND in reverse-framed agency bait posts.
+
+NOTE: a phone number or website alone does NOT make a post a skip — only skip if the overall post is clearly an agency/freelancer/studio advertising itself or its own team's services.
+
+Real examples to SKIP: "At Yashi Associates, we help brands grow with digital marketing..." / "JKS Digital helps businesses grow. Call 8860336294. #DigitalMarketingAgency" / "Brixads helps businesses across Kerala with branding. Call 9744400414" / "Looking for D2C brands to partner with — we're a performance marketing team with 50+ success stories. DM to know more!" / "We have 2 client slots open this month for social media management — comment 'GROWTH' below"
 
 AGENCY-TO-AGENCY COLLABORATION / PARTNERSHIP / WHITE-LABEL (no brand is asking, so never a real lead):
 • "Looking for agencies to collaborate / partner with for white-label projects" → SKIP
@@ -144,13 +163,17 @@ If unsure whether a service is in-domain, default to KEEP rather than this categ
 "Our Dubai-based skincare brand needs a logo design studio" → KEEP
 "Looking for an agency to handle hoarding and pamphlet distribution for our store launch" → SKIP ("Offline marketing only")
 "Looking for a recruitment agency to hire our sales team" → SKIP ("Out of domain")
+"Taking on 2 new D2C clients this month — DM to scale your brand with performance marketing" → agency self-promo reverse-framed as a hiring post → SKIP ("Not asking for an agency")
+"We're a branding studio helping D2C brands build identity — check our portfolio" → agency describing its own services → SKIP ("Not asking for an agency")
+"हमें एक अच्छी मार्केटिंग एजेंसी की तलाश है" (post majority in Hindi) → SKIP ("Non-English Post"), regardless of what it's asking for
+"Nallа oru marketing agency thevai" (Tamil written in Latin script, majority non-English) → SKIP ("Non-English Post")
 
-When a post is a genuine in-domain agency ask → KEEP, regardless of location. Otherwise SKIP with exactly one of the 3 skip_category values.
+When a post PASSES Gate 0 (English) AND is a genuine in-domain agency ask (not the author's own agency self-promoting) → KEEP, regardless of location. Otherwise SKIP with exactly one of the 4 skip_category values.
 
 POST:
 {post_content}
 
-Return exactly this JSON shape (skip_category must be null when is_real_lead is true, and must be exactly one of the 3 listed values when false):
+Return exactly this JSON shape (skip_category must be null when is_real_lead is true, and must be exactly one of the 4 listed values when false):
 {{"is_real_lead": true/false, "skip_category": "Not asking for an agency" or null, "location_country": "India" or null, "reason": "one line"}}"""
 
 

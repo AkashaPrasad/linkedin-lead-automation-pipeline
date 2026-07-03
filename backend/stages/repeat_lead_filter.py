@@ -5,11 +5,26 @@ from post_fields import get_author_url
 log = get_logger("repeat_lead")
 
 
+# Only these represent an ACTUAL resolved contact attempt — a post that
+# reached Stage 6+ and got a real outcome (sent, confirmed no email, or a
+# concrete send failure). "PENDING" is explicitly excluded: every post the
+# AI filter skips at Stage 3 never reaches classify, so it's written to
+# Master with a default Category of "Generic" and Sent Status "PENDING" —
+# without this exclusion, ANY skipped post would wrongly count as "already
+# contacted for Generic" and could block a real, unrelated future lead from
+# the same author. "DRY_RUN" is excluded for the same reason it always was
+# — a dry run never actually contacts anyone.
+_RESOLVED_SENT_STATUSES = {
+    "SENT", "NO_EMAIL", "FAILED", "CAPPED",
+    "SKIPPED_INVALID_EMAIL", "SKIPPED_EXCLUDED_DOMAIN", "SKIPPED_AUTH_FAILURE",
+}
+
+
 def _get_contacted_categories_sync(worksheet) -> dict:
     """
     Reads Master and returns {author_linkedin_url: {category, ...}} for every
-    author who has already been contacted (excluding dry runs) — the set of
-    services they've already been reached out about.
+    author who has already been contacted — the set of services they've
+    already been reached out about for real (see _RESOLVED_SENT_STATUSES).
 
     Column D (index 3) = LinkedIn URL (author profile)
     Column O (index 14) = Category
@@ -26,7 +41,7 @@ def _get_contacted_categories_sync(worksheet) -> dict:
             url = row[3].strip()
             category = row[14].strip()
             sent_status = row[17].strip()
-            if not url or not category or sent_status == "DRY_RUN":
+            if not url or not category or sent_status not in _RESOLVED_SENT_STATUSES:
                 continue
             contacted.setdefault(url, set()).add(category)
         return contacted
