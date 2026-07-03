@@ -1,15 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Zap, Mail, Settings, History as HistoryIcon, AlertTriangle, X } from 'lucide-react'
 import Dashboard from './components/Dashboard'
 import TemplateEditor from './components/TemplateEditor'
 import AdminPanel from './components/AdminPanel'
 import HistoryPage from './components/HistoryPage'
+import { Badge } from '@/components/ui/badge'
+import { Toaster } from '@/components/ui/sonner'
+import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: '⚡' },
-  { id: 'templates', label: 'Templates', icon: '✉' },
-  { id: 'admin', label: 'Admin Panel', icon: '⚙' },
-  { id: 'history', label: 'History', icon: '🕓' },
+  { id: 'dashboard', label: 'Dashboard', icon: Zap },
+  { id: 'templates', label: 'Templates', icon: Mail },
+  { id: 'admin', label: 'Admin Panel', icon: Settings },
+  { id: 'history', label: 'History', icon: HistoryIcon },
 ]
+
+const PAGE_TITLES = {
+  dashboard: 'Pipeline Dashboard',
+  templates: 'Email Templates',
+  admin: 'Admin Panel',
+  history: 'Run History',
+}
 
 function Clock() {
   const [time, setTime] = useState(new Date())
@@ -18,7 +29,7 @@ function Clock() {
     return () => clearInterval(id)
   }, [])
   return (
-    <span className="text-text-secondary text-sm font-mono">
+    <span className="text-muted-foreground text-sm font-mono tabular-nums">
       {time.toLocaleTimeString('en-IN', { hour12: false })}
     </span>
   )
@@ -102,7 +113,7 @@ export default function App() {
         setStages(prev => prev.map(s =>
           s.id === data.stage ? { ...s, status: 'done', metric: data.metric || '' } : s
         ))
-        addLog('INFO', `✅ Stage ${data.stage} complete — ${data.metric}`)
+        addLog('INFO', `Stage ${data.stage} complete — ${data.metric}`)
         break
 
       case 'progress':
@@ -125,7 +136,7 @@ export default function App() {
         setIsRunning(false)
         setCompletionData(data)
         setCheckpoint(null)
-        addLog('INFO', `🎯 Pipeline complete — ${data.sent} sent, ${data.failed} failed, ${data.no_email} no email`)
+        addLog('INFO', `Pipeline complete — ${data.sent} sent, ${data.failed} failed, ${data.no_email} no email`)
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         break
 
@@ -135,7 +146,7 @@ export default function App() {
         setStages(prev => prev.map(s =>
           s.status === 'running' ? { ...s, status: 'failed' } : s
         ))
-        addLog('ERROR', `❌ Pipeline error: ${data.message}`)
+        addLog('ERROR', `Pipeline error: ${data.message}`)
         // Fetch checkpoint — it may have been saved before the error
         fetchCheckpoint()
         if (esRef.current) { esRef.current.close(); esRef.current = null }
@@ -146,7 +157,7 @@ export default function App() {
         setStages(prev => prev.map(s =>
           s.status === 'running' ? { ...s, status: 'waiting' } : s
         ))
-        addLog('WARN', `🛑 ${data.message || 'Pipeline stopped'}`)
+        addLog('WARN', data.message || 'Pipeline stopped')
         fetchCheckpoint()
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         break
@@ -263,53 +274,60 @@ export default function App() {
       return
     }
     setIsRunning(false)
-    addLog('WARN', '🛑 Stop requested...')
+    addLog('WARN', 'Stop requested...')
     if (esRef.current) { esRef.current.close(); esRef.current = null }
   }, [addLog])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-primary">
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Toaster position="bottom-right" />
+
       {/* Sidebar */}
-      <aside className="w-[220px] flex-shrink-0 bg-bg-secondary border-r border-border-color flex flex-col">
-        <div className="px-5 py-6 border-b border-border-color">
+      <aside className="w-[224px] flex-shrink-0 bg-card border-r border-border flex flex-col">
+        <div className="px-5 py-6 border-b border-border">
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full bg-purple-primary animate-pulse" />
-            <span className="text-xs font-semibold text-purple-light tracking-widest uppercase">Decision</span>
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-semibold text-primary/90 tracking-widest uppercase">Decision</span>
           </div>
-          <h1 className="text-base font-bold text-text-primary leading-tight">Pinnacle Pipeline</h1>
+          <h1 className="text-base font-bold text-foreground leading-tight">Pinnacle Pipeline</h1>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveNav(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeNav === item.id
-                  ? 'bg-purple-primary/20 text-purple-light border border-purple-primary/30'
-                  : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-              }`}
-            >
-              <span className="text-base">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon
+            const active = activeNav === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveNav(item.id)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+                  active
+                    ? 'bg-primary/15 text-primary border border-primary/30'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground border border-transparent'
+                )}
+              >
+                <Icon className="w-4 h-4" strokeWidth={2} />
+                {item.label}
+              </button>
+            )
+          })}
         </nav>
 
-        <div className="px-5 py-4 border-t border-border-color space-y-2">
-          <div className={`flex items-center gap-2 text-xs ${isRunning ? 'text-green-accent' : 'text-text-muted'}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-green-accent animate-pulse' : 'bg-text-muted'}`} />
+        <div className="px-5 py-4 border-t border-border space-y-2">
+          <div className={cn('flex items-center gap-2 text-xs', isRunning ? 'text-emerald-400' : 'text-muted-foreground')}>
+            <div className={cn('w-1.5 h-1.5 rounded-full', isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/60')} />
             {isRunning ? 'Pipeline running' : 'Ready'}
           </div>
           {isDryRun && (
-            <div className="flex items-center gap-1.5 text-xs text-amber-accent">
-              <span>⚠</span>
+            <div className="flex items-center gap-1.5 text-xs text-amber-400">
+              <AlertTriangle className="w-3 h-3" />
               <span className="font-semibold">DRY RUN ON</span>
             </div>
           )}
           {isAutomated && (
-            <div className="flex items-center gap-1.5 text-xs text-green-accent">
-              <span>⚡</span>
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <Zap className="w-3 h-3" />
               <span className="font-semibold">AUTO SCHEDULE ON</span>
             </div>
           )}
@@ -319,37 +337,38 @@ export default function App() {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-4 bg-bg-secondary border-b border-border-color flex-shrink-0">
+        <header className="flex items-center justify-between px-6 py-4 bg-card border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-text-primary">
-              {activeNav === 'dashboard' ? 'Pipeline Dashboard' : activeNav === 'templates' ? 'Email Templates' : activeNav === 'admin' ? 'Admin Panel' : 'Run History'}
-            </h2>
+            <h2 className="text-sm font-semibold text-foreground">{PAGE_TITLES[activeNav]}</h2>
           </div>
           <div className="flex items-center gap-3">
             <Clock />
             {isDryRun && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-accent/15 border border-amber-accent/40 text-amber-accent text-xs font-semibold">
-                ⚠ DRY RUN
-              </span>
+              <Badge variant="outline" className="gap-1.5 border-amber-500/40 bg-amber-500/10 text-amber-400">
+                <AlertTriangle className="w-3 h-3" />
+                DRY RUN
+              </Badge>
             )}
             {isRunning && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-primary/20 border border-purple-primary/30 text-purple-light text-xs font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-light animate-pulse" />
+              <Badge className="gap-1.5 border-primary/30 bg-primary/15 text-primary hover:bg-primary/15">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                 Running
-              </span>
+              </Badge>
             )}
           </div>
         </header>
 
         {/* Error banner */}
         {error && (
-          <div className="mx-6 mt-4 px-4 py-3 bg-red-accent/10 border border-red-accent/30 rounded-lg flex items-start gap-3">
-            <span className="text-red-accent text-sm mt-0.5">⚠</span>
+          <div className="mx-6 mt-4 px-4 py-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-red-accent">Pipeline Error</p>
-              <p className="text-xs text-text-secondary mt-0.5">{error}</p>
+              <p className="text-sm font-medium text-destructive">Pipeline Error</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-text-muted hover:text-text-primary text-xs">✕</button>
+            <button onClick={() => setError(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 

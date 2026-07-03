@@ -1,19 +1,43 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
+import {
+  Folder, FolderOpen, FolderPlus, X, Loader2, KeyRound, CheckCircle2,
+  AlertTriangle, MousePointerClick, Zap, Clock as ClockIcon, Save,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
+import { cn } from '@/lib/utils'
 
 const TABS = ['Scraping', 'AI Filtering', 'Enrichment', 'Email Sending', 'Automation']
 
-// ── Reusable UI pieces ────────────────────────────────────────────────────────
+// ── Reusable UI pieces ──────────────────────────────────────────────────────
 
 function SectionLabel({ children }) {
-  return <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-3">{children}</h4>
+  return <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">{children}</h4>
 }
 
 function Field({ label, hint, children }) {
   return (
     <div className="space-y-1.5">
       <div>
-        <label className="text-sm font-medium text-text-primary">{label}</label>
-        {hint && <p className="text-xs text-text-muted mt-0.5">{hint}</p>}
+        <Label className="text-sm font-medium text-foreground">{label}</Label>
+        {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
       </div>
       {children}
     </div>
@@ -37,7 +61,7 @@ function NumberInput({ value, onChange, min = 0, max = 99999, step = 1 }) {
   }
 
   return (
-    <input
+    <Input
       type="number"
       value={raw}
       onChange={e => {
@@ -50,34 +74,22 @@ function NumberInput({ value, onChange, min = 0, max = 99999, step = 1 }) {
       min={min}
       max={max}
       step={step}
-      className="w-full bg-bg-primary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
-    />
-  )
-}
-
-function TextInput({ value, onChange, placeholder = '' }) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full bg-bg-primary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-purple-primary/50 transition-colors"
     />
   )
 }
 
 function SelectInput({ value, onChange, options }) {
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="w-full bg-bg-primary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
-    >
-      {options.map(o => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map(o => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -85,21 +97,16 @@ function Toggle({ value, onChange, label, hint }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="text-sm font-medium text-text-primary">{label}</p>
-        {hint && <p className="text-xs text-text-muted mt-0.5">{hint}</p>}
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
       </div>
-      <button
-        onClick={() => onChange(!value)}
-        className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${value ? 'bg-purple-primary' : 'bg-bg-tertiary border border-border-color'}`}
-      >
-        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform shadow ${value ? 'translate-x-5' : ''}`} />
-      </button>
+      <Switch checked={value} onCheckedChange={onChange} className="flex-shrink-0" />
     </div>
   )
 }
 
-// ── Editable list (like Apify keyword UI) ─────────────────────────────────────
-function EditableList({ items, onChange, placeholder = 'Add item...', addLabel = '+ Add' }) {
+// ── Editable list (like Apify keyword UI) ───────────────────────────────────
+function EditableList({ items, onChange, placeholder = 'Add item...', addLabel = 'Add' }) {
   const [newItem, setNewItem] = useState('')
 
   const add = () => {
@@ -118,84 +125,91 @@ function EditableList({ items, onChange, placeholder = 'Add item...', addLabel =
 
   return (
     <div className="space-y-2">
-      {/* Existing items */}
       <div className="space-y-1.5">
         {items.map((item, i) => (
           <div
             key={i}
-            className="flex items-center gap-2 bg-bg-primary border border-border-color rounded-lg px-3 py-2 group"
+            className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2 group"
           >
-            <span className="w-6 h-6 rounded-md bg-purple-primary/10 text-purple-light text-xs font-bold flex items-center justify-center flex-shrink-0">
+            <span className="w-6 h-6 rounded-md bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">
               {i + 1}
             </span>
-            <span className="flex-1 text-sm text-text-primary font-mono">{item}</span>
+            <span className="flex-1 text-sm text-foreground font-mono">{item}</span>
             <button
               onClick={() => remove(i)}
-              className="w-6 h-6 rounded flex items-center justify-center text-text-muted hover:text-red-accent hover:bg-red-accent/10 transition-colors opacity-0 group-hover:opacity-100"
+              className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         ))}
         {items.length === 0 && (
-          <p className="text-xs text-text-muted italic px-1">No items — add one below</p>
+          <p className="text-xs text-muted-foreground italic px-1">No items — add one below</p>
         )}
       </div>
 
-      {/* Add new */}
       <div className="flex gap-2">
-        <input
-          type="text"
+        <Input
           value={newItem}
           onChange={e => setNewItem(e.target.value)}
           onKeyDown={handleKey}
           placeholder={placeholder}
-          className="flex-1 bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-purple-primary/50 transition-colors"
+          className="flex-1"
         />
-        <button
-          onClick={add}
-          disabled={!newItem.trim()}
-          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
+        <Button variant="outline" onClick={add} disabled={!newItem.trim()}>
           {addLabel}
-        </button>
+        </Button>
       </div>
     </div>
   )
 }
 
-// ── Query set ("folder") manager ───────────────────────────────────────────────
-function QuerySetManager({ s, setMany }) {
+// ── Query folder manager ─────────────────────────────────────────────────────
+// Proper folder CRUD: "+ New Folder" always creates a BLANK set and switches to
+// it immediately — no more inheriting whatever the previous folder's list held.
+function QueryFolderManager({ s, setMany }) {
   const querySets = s.query_sets || {}
   const activeSet = s.active_query_set || ''
   const setNames = Object.keys(querySets)
-  const [newSetName, setNewSetName] = useState('')
-  const [confirmDelete, setConfirmDelete] = useState(null)
 
-  // A click on the ✕ only arms a confirmation — it takes a second click within
-  // 4s on the same chip to actually delete. Prevents misclicks from wiping a set.
-  useEffect(() => {
-    if (!confirmDelete) return
-    const t = setTimeout(() => setConfirmDelete(null), 4000)
-    return () => clearTimeout(t)
-  }, [confirmDelete])
+  const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [renamingName, setRenamingName] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   const selectSet = (name) => {
     setMany({ active_query_set: name, search_queries: [...(querySets[name] || [])] })
   }
 
-  const persistAs = (name) => {
-    const trimmed = name.trim()
-    if (!trimmed) return
+  const createFolder = () => {
+    const trimmed = newFolderName.trim()
+    if (!trimmed || querySets[trimmed]) return
     setMany({
-      query_sets: { ...querySets, [trimmed]: [...(s.search_queries || [])] },
+      query_sets: { ...querySets, [trimmed]: [] },
       active_query_set: trimmed,
+      search_queries: [],
     })
+    setNewFolderName('')
+    setNewFolderOpen(false)
+    toast.success(`Folder "${trimmed}" created — add queries below`)
   }
 
-  const updateActiveSet = () => {
-    if (!activeSet) return
-    persistAs(activeSet)
+  const renameFolder = (oldName) => {
+    const trimmed = renameValue.trim()
+    if (!trimmed || trimmed === oldName) { setRenamingName(null); return }
+    if (querySets[trimmed]) { toast.error(`A folder named "${trimmed}" already exists`); return }
+    const next = { ...querySets }
+    const queries = next[oldName] || []
+    delete next[oldName]
+    next[trimmed] = queries
+    const isActive = activeSet === oldName
+    setMany({
+      query_sets: next,
+      active_query_set: isActive ? trimmed : activeSet,
+      ...(isActive ? { search_queries: [...queries] } : {}),
+    })
+    setRenamingName(null)
   }
 
   const deleteSet = (name) => {
@@ -208,84 +222,112 @@ function QuerySetManager({ s, setMany }) {
     } else {
       setMany({ query_sets: next })
     }
-  }
-
-  const handleDeleteClick = (name) => {
-    if (confirmDelete === name) {
-      deleteSet(name)
-      setConfirmDelete(null)
-    } else {
-      setConfirmDelete(name)
-    }
+    setDeleteTarget(null)
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         {setNames.map(name => (
           <div
             key={name}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors ${
+            className={cn(
+              'group flex items-center gap-1 rounded-lg border pl-3 pr-1.5 py-1.5 transition-colors',
               name === activeSet
-                ? 'border-purple-primary bg-purple-primary/10 text-purple-light'
-                : 'border-border-color bg-bg-primary text-text-secondary hover:border-purple-primary/40'
-            }`}
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+            )}
           >
+            {renamingName === name ? (
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') renameFolder(name)
+                  if (e.key === 'Escape') setRenamingName(null)
+                }}
+                onBlur={() => renameFolder(name)}
+                className="bg-transparent text-sm font-medium outline-none w-28"
+              />
+            ) : (
+              <button
+                onClick={() => selectSet(name)}
+                onDoubleClick={() => { setRenamingName(name); setRenameValue(name) }}
+                className="text-sm font-medium flex items-center gap-1.5 py-0.5"
+                title="Click to select, double-click to rename"
+              >
+                {name === activeSet ? <FolderOpen className="w-3.5 h-3.5" /> : <Folder className="w-3.5 h-3.5" />}
+                {name}
+              </button>
+            )}
             <button
-              onClick={() => { setConfirmDelete(null); selectSet(name) }}
-              className="text-sm font-medium flex items-center gap-1 py-0.5"
+              onClick={() => setDeleteTarget(name)}
+              title={`Delete ${name}`}
+              className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
             >
-              <span>📁</span>
-              <span>{name}</span>
-              {name === activeSet && <span className="text-purple-light">✓</span>}
-            </button>
-            <button
-              onClick={() => handleDeleteClick(name)}
-              title={confirmDelete === name ? `Click again to permanently delete "${name}"` : `Delete ${name}`}
-              className={`flex items-center justify-center border-l transition-colors flex-shrink-0 ${
-                confirmDelete === name
-                  ? 'border-red-accent/40 text-red-accent text-[11px] font-semibold pl-2 ml-1 h-5 whitespace-nowrap'
-                  : 'border-border-color/60 text-text-muted hover:text-red-accent text-xs w-5 h-5 ml-1 rounded-r'
-              }`}
-            >
-              {confirmDelete === name ? 'Confirm ✕' : '✕'}
+              <X className="w-3 h-3" />
             </button>
           </div>
         ))}
         {setNames.length === 0 && (
-          <p className="text-xs text-text-muted italic px-1">No saved query sets yet — save one below</p>
+          <p className="text-xs text-muted-foreground italic px-1">No saved folders yet — create one</p>
         )}
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setNewFolderOpen(true)}>
+          <FolderPlus className="w-3.5 h-3.5" />
+          New Folder
+        </Button>
       </div>
 
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={newSetName}
-          onChange={e => setNewSetName(e.target.value)}
-          placeholder="New set name, e.g. search-2..."
-          className="flex-1 bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-purple-primary/50 transition-colors"
-        />
-        <button
-          onClick={() => { persistAs(newSetName); setNewSetName('') }}
-          disabled={!newSetName.trim()}
-          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-        >
-          Save list as new set
-        </button>
-        {activeSet && (
-          <button
-            onClick={updateActiveSet}
-            className="px-4 py-2 rounded-lg bg-bg-tertiary border border-border-color text-text-secondary text-sm font-medium hover:bg-bg-tertiary/70 transition-colors whitespace-nowrap"
-          >
-            Update "{activeSet}"
-          </button>
-        )}
-      </div>
+      <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>New search query folder</DialogTitle>
+            <DialogDescription>Creates a blank folder — add your queries into it right after, nothing is inherited.</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={newFolderName}
+            onChange={e => setNewFolderName(e.target.value)}
+            placeholder="e.g. test-7"
+            onKeyDown={e => e.key === 'Enter' && createFolder()}
+          />
+          {querySets[newFolderName.trim()] && (
+            <p className="text-xs text-destructive">A folder with this name already exists</p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setNewFolderOpen(false)}>Cancel</Button>
+            <Button onClick={createFolder} disabled={!newFolderName.trim() || !!querySets[newFolderName.trim()]}>
+              Create
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the folder and its saved queries once you click Save Changes. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteSet(deleteTarget)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
 
-// ── LinkedIn cookie manager ─────────────────────────────────────────────────────
+// ── LinkedIn cookie manager ───────────────────────────────────────────────────
 function LinkedInCookieManager() {
   const [status, setStatus] = useState(null)
   const [cookieInput, setCookieInput] = useState('')
@@ -335,44 +377,45 @@ function LinkedInCookieManager() {
   }
 
   return (
-    <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-3">
+    <div className="p-4 bg-background border border-border rounded-xl space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-text-primary">LinkedIn Session Cookies</p>
+        <p className="text-sm font-medium text-foreground flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-muted-foreground" />
+          LinkedIn Session Cookies
+        </p>
         {status?.configured ? (
-          <span className="text-xs text-green-accent font-mono">✓ configured ({status.preview})</span>
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 gap-1">
+            <CheckCircle2 className="w-3 h-3" /> configured ({status.preview})
+          </Badge>
         ) : (
-          <span className="text-xs text-amber-accent">not configured</span>
+          <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-400">not configured</Badge>
         )}
       </div>
-      <p className="text-xs text-text-muted">
+      <p className="text-xs text-muted-foreground leading-relaxed">
         The scraper actor needs your FULL LinkedIn session, not just one cookie. Install the{' '}
-        <strong className="text-text-secondary">Cookie-Editor</strong> browser extension, log into
-        LinkedIn, click the extension icon, choose <strong className="text-text-secondary">Export → Export as JSON</strong>,
+        <strong className="text-foreground">Cookie-Editor</strong> browser extension, log into
+        LinkedIn, click the extension icon, choose <strong className="text-foreground">Export → Export as JSON</strong>,
         and paste the entire JSON array below (it will contain li_at, JSESSIONID, and several others —
         that's expected). A single li_at value alone will be rejected as "invalid cookies". This is
         stored only in the backend's local .env file, never committed to git.
       </p>
       <div className="space-y-2">
-        <textarea
+        <Textarea
           value={cookieInput}
           onChange={e => setCookieInput(e.target.value)}
           placeholder='Paste the full Cookie-Editor JSON export, e.g. [{"name":"li_at","value":"...","domain":".linkedin.com",...}, {"name":"JSESSIONID","value":"...",...}, ...]'
           autoComplete="off"
           rows={5}
-          className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-xs text-text-primary placeholder-text-muted font-mono focus:outline-none focus:border-purple-primary/50 transition-colors resize-y"
+          className="font-mono text-xs resize-y"
         />
-        <button
-          onClick={updateCookie}
-          disabled={!cookieInput.trim() || saving}
-          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-        >
+        <Button onClick={updateCookie} disabled={!cookieInput.trim() || saving}>
           {saving ? 'Saving...' : 'Update Cookies'}
-        </button>
+        </Button>
       </div>
-      {saveStatus === 'saved' && <p className="text-xs text-green-accent">✓ Cookies updated</p>}
-      {saveStatus === 'error' && <p className="text-xs text-red-accent">Failed to save cookies</p>}
-      {saveStatus === 'invalid-json' && <p className="text-xs text-red-accent">Not valid JSON — make sure you pasted the full export, not partial text.</p>}
-      {saveStatus === 'invalid-format' && <p className="text-xs text-red-accent">Must be a JSON array of cookie objects (Cookie-Editor's export format), not a single value.</p>}
+      {saveStatus === 'saved' && <p className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Cookies updated</p>}
+      {saveStatus === 'error' && <p className="text-xs text-destructive">Failed to save cookies</p>}
+      {saveStatus === 'invalid-json' && <p className="text-xs text-destructive">Not valid JSON — make sure you pasted the full export, not partial text.</p>}
+      {saveStatus === 'invalid-format' && <p className="text-xs text-destructive">Must be a JSON array of cookie objects (Cookie-Editor's export format), not a single value.</p>}
     </div>
   )
 }
@@ -386,31 +429,39 @@ function ScrapingTab({ cfg, onChange }) {
   const flt = cfg.filtering || {}
   const setF = (key, val) => onChange({ ...cfg, filtering: { ...flt, [key]: val } })
 
+  // Edits to the active folder's query list are mirrored into query_sets
+  // immediately (in-session) — no separate "Update" step needed. The global
+  // Save Changes button is still what actually reaches the backend.
+  const setSearchQueries = (v) => {
+    const patch = { search_queries: v }
+    if (s.active_query_set && s.query_sets?.[s.active_query_set] !== undefined) {
+      patch.query_sets = { ...(s.query_sets || {}), [s.active_query_set]: v }
+    }
+    setMany(patch)
+  }
+
   return (
     <div className="space-y-8">
       <div className="space-y-4">
-        <SectionLabel>Search Query Sets</SectionLabel>
+        <SectionLabel>Search Query Folders</SectionLabel>
         <Field
-          label="Saved Sets"
-          hint="Save different keyword lists as named sets and switch between them. Selecting a set loads its queries into the list below; editing the list only updates the active set once you click Update."
+          label="Folders"
+          hint="Organize keyword lists into folders and switch between them. New Folder starts blank — add queries below, they save into that folder automatically."
         >
-          <QuerySetManager s={s} setMany={setMany} />
+          <QueryFolderManager s={s} setMany={setMany} />
         </Field>
       </div>
 
       <div className="space-y-4">
         <SectionLabel>
           Search Keywords{s.active_query_set && (
-            <span className="text-text-muted font-normal normal-case tracking-normal"> — editing "{s.active_query_set}"</span>
+            <span className="text-muted-foreground font-normal normal-case tracking-normal"> — editing "{s.active_query_set}"</span>
           )}
         </SectionLabel>
-        <Field
-          label="Search Queries"
-          hint="LinkedIn posts matching any of these keywords will be scraped. This is the active list that will run — use 'Update' above to save edits into the selected set."
-        >
+        <Field label="Search Queries" hint="LinkedIn posts matching any of these keywords will be scraped.">
           <EditableList
             items={s.search_queries || []}
-            onChange={v => set('search_queries', v)}
+            onChange={setSearchQueries}
             placeholder="Add a search keyword or phrase..."
           />
         </Field>
@@ -484,7 +535,6 @@ function ScrapingTab({ cfg, onChange }) {
               items={s.author_industry_ids || []}
               onChange={v => set('author_industry_ids', v)}
               placeholder="e.g. Marketing and Advertising"
-              addLabel="+ Add"
             />
           </Field>
         </div>
@@ -498,7 +548,6 @@ function ScrapingTab({ cfg, onChange }) {
               items={s.author_geo_ids || []}
               onChange={v => set('author_geo_ids', v)}
               placeholder="e.g. 102713980 (India)"
-              addLabel="+ Add"
             />
           </Field>
         </div>
@@ -515,7 +564,7 @@ function FilteringTab({ cfg, onChange }) {
     <div className="space-y-8">
       <div className="space-y-4">
         <SectionLabel>AI Lead Filter (Stage 3)</SectionLabel>
-        <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-4">
+        <div className="p-4 bg-background border border-border rounded-xl space-y-4">
           <Toggle
             value={f.gpt_filter_enabled ?? true}
             onChange={v => set('gpt_filter_enabled', v)}
@@ -562,37 +611,36 @@ function EnrichmentTab({ cfg, onChange }) {
 
   return (
     <div className="space-y-8">
-      {/* Apollo plan warning */}
       {apolloPlan && !apolloPlan.accessible && (
-        <div className="flex items-start gap-3 p-4 bg-amber-accent/10 border border-amber-accent/40 rounded-xl">
-          <span className="text-xl flex-shrink-0">⚠</span>
-          <div className="flex-1">
-            <p className="text-sm font-bold text-amber-accent">Apollo Email Enrichment Not Available</p>
-            <p className="text-xs text-amber-accent/80 mt-1 leading-relaxed">
-              {apolloPlan.reason}.
-              This means leads without an email in their post will be marked <strong>NO_EMAIL</strong> and won't receive your outreach.
-            </p>
-            <p className="text-xs text-amber-accent/80 mt-2">
+        <Alert className="border-amber-500/40 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-400" />
+          <AlertTitle className="text-amber-400">Apollo Email Enrichment Not Available</AlertTitle>
+          <AlertDescription className="text-amber-400/80 space-y-2">
+            <p>{apolloPlan.reason}. This means leads without an email in their post will be marked <strong>NO_EMAIL</strong> and won't receive your outreach.</p>
+            <p>
               To fix: upgrade to <strong>Apollo Starter ($49/month)</strong> — includes 300 email lookups/month.{' '}
-              <a href="https://app.apollo.io/settings/plans" target="_blank" rel="noreferrer"
-                 className="underline hover:no-underline">Upgrade Apollo plan ↗</a>
+              <a href="https://app.apollo.io/settings/plans" target="_blank" rel="noreferrer" className="underline hover:no-underline">
+                Upgrade Apollo plan ↗
+              </a>
             </p>
-            <p className="text-xs text-text-muted mt-2">
-              Alternative for now: use the <strong>Only posts with email</strong> toggle in AI Filtering tab to focus only on posts that already have an email address visible.
+            <p className="text-muted-foreground">
+              Alternative for now: use the <strong>Only posts with email</strong> toggle in AI Filtering tab.
             </p>
-          </div>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
       {apolloPlan?.accessible && (
-        <div className="flex items-center gap-2 p-3 bg-green-accent/10 border border-green-accent/30 rounded-xl">
-          <span className="text-green-accent">✓</span>
-          <p className="text-xs text-green-accent font-medium">Apollo email enrichment is active and working on your plan.</p>
-        </div>
+        <Alert className="border-emerald-500/30 bg-emerald-500/10">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <AlertDescription className="text-emerald-400 font-medium">
+            Apollo email enrichment is active and working on your plan.
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="space-y-4">
         <SectionLabel>Apollo.io Enrichment (Stage 6)</SectionLabel>
-        <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-4">
+        <div className="p-4 bg-background border border-border rounded-xl space-y-4">
           <Toggle
             value={e.apollo_enabled ?? true}
             onChange={v => set('apollo_enabled', v)}
@@ -604,19 +652,15 @@ function EnrichmentTab({ cfg, onChange }) {
 
       <div className="space-y-4">
         <SectionLabel>Enrichment Limits</SectionLabel>
-        <Field
-          label="Max Enrichment Lookups Per Run"
-          hint="Apollo free plan gives limited lookups/month. Cap this to avoid burning through your quota in one run."
-        >
+        <Field label="Max Enrichment Lookups Per Run" hint="Apollo free plan gives limited lookups/month. Cap this to avoid burning through your quota in one run.">
           <NumberInput value={e.max_enrichment_per_run || 100} onChange={v => set('max_enrichment_per_run', v)} min={10} max={500} step={10} />
         </Field>
       </div>
 
-      <div className="p-4 bg-amber-accent/5 border border-amber-accent/20 rounded-xl">
-        <p className="text-xs text-amber-accent font-medium mb-1">Apollo Quota Tip</p>
-        <p className="text-xs text-text-secondary leading-relaxed">
+      <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
+        <p className="text-xs text-primary font-medium mb-1">Apollo Quota Tip</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
           Apollo free plan: 50 email credits/month. Paid plans start at $49/month for 300 credits.
-          Email credits are only consumed when Apollo finds a valid email — not for "not found" responses.
         </p>
       </div>
     </div>
@@ -631,7 +675,7 @@ function SendingTab({ cfg, onChange }) {
     <div className="space-y-8">
       <div className="space-y-4">
         <SectionLabel>Send Controls</SectionLabel>
-        <div className="p-4 bg-bg-primary border border-border-color rounded-xl space-y-4">
+        <div className="p-4 bg-background border border-border rounded-xl space-y-4">
           <Toggle
             value={s.dry_run_mode ?? false}
             onChange={v => set('dry_run_mode', v)}
@@ -655,9 +699,9 @@ function SendingTab({ cfg, onChange }) {
         <div className="space-y-4">
           <SectionLabel>Sender Settings</SectionLabel>
           <Field label="Reply-To Email (optional)" hint="Replies from leads go to this address instead of the sender. Leave blank to use sender email.">
-            <TextInput
+            <Input
               value={s.reply_to_email || ''}
-              onChange={v => set('reply_to_email', v)}
+              onChange={e => set('reply_to_email', e.target.value)}
               placeholder="replies@decisionpinnacle.co"
             />
           </Field>
@@ -666,10 +710,7 @@ function SendingTab({ cfg, onChange }) {
 
       <div className="space-y-4">
         <SectionLabel>Domain Exclusions</SectionLabel>
-        <Field
-          label="Excluded Domains"
-          hint="Never send to emails from these domains. Add personal email domains to only target business emails."
-        >
+        <Field label="Excluded Domains" hint="Never send to emails from these domains. Add personal email domains to only target business emails.">
           <EditableList
             items={s.excluded_domains || []}
             onChange={v => set('excluded_domains', v)}
@@ -678,9 +719,9 @@ function SendingTab({ cfg, onChange }) {
         </Field>
       </div>
 
-      <div className="p-4 bg-purple-primary/5 border border-purple-primary/20 rounded-xl">
-        <p className="text-xs text-purple-light font-medium mb-1">Brevo Free Plan Limits</p>
-        <p className="text-xs text-text-secondary leading-relaxed">
+      <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
+        <p className="text-xs text-primary font-medium mb-1">Brevo Free Plan Limits</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
           Free plan: 300 emails/day, 9,000/month. Upgrade to Starter ($25/mo) for 20k/month.
           Remaining leads are marked as NO_EMAIL (with a note in the Error column) if the daily limit is hit.
         </p>
@@ -710,31 +751,26 @@ function TimeList({ times, onChange }) {
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         {times.map(t => (
-          <div key={t} className="flex items-center gap-1.5 bg-bg-primary border border-border-color rounded-lg px-3 py-1.5 group">
-            <span className="text-sm font-mono text-text-primary">{t}</span>
+          <div key={t} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-3 py-1.5 group">
+            <span className="text-sm font-mono text-foreground">{t}</span>
             <button
               onClick={() => remove(t)}
-              className="w-4 h-4 rounded flex items-center justify-center text-text-muted hover:text-red-accent transition-colors opacity-0 group-hover:opacity-100 text-xs"
+              className="w-4 h-4 rounded flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
             >
-              ✕
+              <X className="w-3 h-3" />
             </button>
           </div>
         ))}
-        {times.length === 0 && <p className="text-xs text-text-muted italic">No times set</p>}
+        {times.length === 0 && <p className="text-xs text-muted-foreground italic">No times set</p>}
       </div>
       <div className="flex gap-2">
-        <input
+        <Input
           type="time"
           value={newTime}
           onChange={e => setNewTime(e.target.value)}
-          className="bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
+          className="w-auto"
         />
-        <button
-          onClick={add}
-          className="px-4 py-2 rounded-lg bg-purple-primary/10 border border-purple-primary/30 text-purple-light text-sm font-medium hover:bg-purple-primary/20 transition-colors"
-        >
-          + Add Time
-        </button>
+        <Button variant="outline" onClick={add}>Add Time</Button>
       </div>
     </div>
   )
@@ -752,40 +788,31 @@ function AutomationTab({ cfg, onChange }) {
       .catch(() => {})
   }, [a.enabled])
 
-  const toggleDay = (day) => {
-    const current = a.days || []
-    const next = current.includes(day) ? current.filter(d => d !== day) : [...current, day]
-    set('days', next)
-  }
-
   return (
     <div className="space-y-8">
-      {/* Mode toggle */}
       <div className="space-y-4">
         <SectionLabel>Pipeline Mode</SectionLabel>
-        <div className="p-4 bg-bg-primary border border-border-color rounded-xl">
+        <div className="p-4 bg-background border border-border rounded-xl">
           <div className="flex gap-3">
             <button
               onClick={() => set('enabled', false)}
-              className={`flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
-                !a.enabled
-                  ? 'border-purple-primary bg-purple-primary/10 text-purple-light'
-                  : 'border-border-color text-text-muted hover:border-border-color/80 hover:text-text-secondary'
-              }`}
+              className={cn(
+                'flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all',
+                !a.enabled ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-border/80 hover:text-foreground'
+              )}
             >
-              <span className="text-2xl">🖱</span>
+              <MousePointerClick className="w-6 h-6" />
               <span className="text-sm font-semibold">Manual</span>
               <span className="text-xs text-center opacity-70">Run only when you click the Run button</span>
             </button>
             <button
               onClick={() => set('enabled', true)}
-              className={`flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
-                a.enabled
-                  ? 'border-purple-primary bg-purple-primary/10 text-purple-light'
-                  : 'border-border-color text-text-muted hover:border-border-color/80 hover:text-text-secondary'
-              }`}
+              className={cn(
+                'flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all',
+                a.enabled ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-border/80 hover:text-foreground'
+              )}
             >
-              <span className="text-2xl">⚡</span>
+              <Zap className="w-6 h-6" />
               <span className="text-sm font-semibold">Automated</span>
               <span className="text-xs text-center opacity-70">Runs on a schedule automatically</span>
             </button>
@@ -793,40 +820,30 @@ function AutomationTab({ cfg, onChange }) {
         </div>
       </div>
 
-      {/* Schedule settings — only shown when automated */}
       {a.enabled && (
         <>
           <div className="space-y-4">
             <SectionLabel>Run Days</SectionLabel>
-            <div className="flex gap-2 flex-wrap">
-              {DAYS.map(day => {
-                const active = (a.days || []).includes(day)
-                return (
-                  <button
-                    key={day}
-                    onClick={() => toggleDay(day)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                      active
-                        ? 'bg-purple-primary text-white border-purple-primary'
-                        : 'bg-bg-primary border-border-color text-text-muted hover:text-text-primary hover:border-purple-primary/30'
-                    }`}
-                  >
-                    {DAY_SHORT[day]}
-                  </button>
-                )
-              })}
-            </div>
+            <ToggleGroup
+              type="multiple"
+              value={a.days || []}
+              onValueChange={(v) => set('days', v)}
+              className="flex-wrap justify-start"
+            >
+              {DAYS.map(day => (
+                <ToggleGroupItem key={day} value={day} variant="outline" className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary">
+                  {DAY_SHORT[day]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
             {(a.days || []).length === 0 && (
-              <p className="text-xs text-amber-accent">⚠ Select at least one day for scheduled runs</p>
+              <p className="text-xs text-amber-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Select at least one day for scheduled runs</p>
             )}
           </div>
 
           <div className="space-y-4">
             <SectionLabel>Run Times</SectionLabel>
-            <Field
-              label="Schedule Times"
-              hint="The pipeline will run at each of these times on the selected days. All times are in the selected timezone."
-            >
+            <Field label="Schedule Times" hint="The pipeline will run at each of these times on the selected days. All times are in the selected timezone.">
               <TimeList times={a.times || []} onChange={v => set('times', v)} />
             </Field>
           </div>
@@ -842,19 +859,18 @@ function AutomationTab({ cfg, onChange }) {
             </Field>
           </div>
 
-          {/* Next runs preview */}
           <div className="space-y-3">
             <SectionLabel>Next Scheduled Runs</SectionLabel>
-            <div className="p-4 bg-bg-primary border border-border-color rounded-xl">
+            <div className="p-4 bg-background border border-border rounded-xl">
               {nextRuns.length === 0 ? (
-                <p className="text-xs text-text-muted italic">Save your settings to see scheduled times</p>
+                <p className="text-xs text-muted-foreground italic">Save your settings to see scheduled times</p>
               ) : (
                 <div className="space-y-2">
                   {nextRuns.slice(0, 5).map((t, i) => {
                     const d = new Date(t)
                     return (
-                      <div key={i} className="flex items-center gap-2 text-xs text-text-secondary">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-accent flex-shrink-0" />
+                      <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <ClockIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                         {d.toLocaleString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                       </div>
                     )
@@ -867,10 +883,10 @@ function AutomationTab({ cfg, onChange }) {
       )}
 
       {!a.enabled && (
-        <div className="p-4 bg-bg-primary border border-border-color rounded-xl">
-          <p className="text-xs text-text-secondary leading-relaxed">
-            In <strong className="text-text-primary">Manual mode</strong>, the pipeline only runs when you click the{' '}
-            <strong className="text-text-primary">Run Pipeline</strong> button on the Dashboard.
+        <div className="p-4 bg-background border border-border rounded-xl">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            In <strong className="text-foreground">Manual mode</strong>, the pipeline only runs when you click the{' '}
+            <strong className="text-foreground">Run Pipeline</strong> button on the Dashboard.
             No automatic runs will occur.
           </p>
         </div>
@@ -886,7 +902,6 @@ export default function AdminPanel() {
   const [saved, setSaved] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState(null)
 
   useEffect(() => {
     fetch('/api/admin/config')
@@ -903,7 +918,6 @@ export default function AdminPanel() {
 
   const save = async () => {
     setSaving(true)
-    setSaveStatus(null)
     try {
       const res = await fetch('/api/admin/config', {
         method: 'POST',
@@ -912,10 +926,9 @@ export default function AdminPanel() {
       })
       if (!res.ok) throw new Error('Save failed')
       setSaved(JSON.stringify(config))
-      setSaveStatus('saved')
-      setTimeout(() => setSaveStatus(null), 3000)
+      toast.success('Settings saved — takes effect on next run')
     } catch (e) {
-      setSaveStatus('error')
+      toast.error('Save failed — check the backend is reachable')
     }
     setSaving(false)
   }
@@ -923,14 +936,14 @@ export default function AdminPanel() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-purple-primary border-t-transparent rounded-full animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     )
   }
 
   if (!config) {
     return (
-      <div className="h-full flex items-center justify-center text-text-muted text-sm">
+      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
         Failed to load config. Is the backend running?
       </div>
     )
@@ -946,74 +959,40 @@ export default function AdminPanel() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-6 gap-4">
-      {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h2 className="text-lg font-bold text-text-primary">Admin Panel</h2>
-          <p className="text-xs text-text-muted mt-0.5">
-            Pipeline settings — changes take effect on the next Run
-          </p>
+          <h2 className="text-lg font-bold text-foreground">Admin Panel</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Pipeline settings — changes take effect on the next Run</p>
         </div>
-        <div className="flex items-center gap-3">
-          {saveStatus === 'saved' && (
-            <span className="text-xs text-green-accent flex items-center gap-1">
-              <span>✓</span> Saved — takes effect on next run
-            </span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-xs text-red-accent">Save failed</span>
-          )}
-          <button
-            onClick={save}
-            disabled={!isDirty || saving}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              isDirty && !saving
-                ? 'bg-purple-primary text-white hover:bg-purple-primary/90'
-                : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-            }`}
-          >
-            {saving ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Saving...
-              </>
-            ) : isDirty ? 'Save Changes' : 'No Changes'}
-          </button>
-        </div>
+        <Button onClick={save} disabled={!isDirty || saving} className="gap-2">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'Saving...' : isDirty ? 'Save Changes' : 'No Changes'}
+        </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 flex-shrink-0 bg-bg-secondary border border-border-color rounded-xl p-1">
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === tab
-                ? 'bg-purple-primary text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-          >
-            {tab}
-            {tab === 'Email Sending' && config?.sending?.dry_run_mode && (
-              <span className="ml-1.5 text-amber-accent text-xs">DRY RUN</span>
-            )}
-            {tab === 'Automation' && config?.automation?.enabled && (
-              <span className="ml-1.5 text-green-accent text-xs">ON</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="flex-shrink-0 w-full justify-start">
+          {TABS.map(tab => (
+            <TabsTrigger key={tab} value={tab} className="gap-1.5">
+              {tab}
+              {tab === 'Email Sending' && config?.sending?.dry_run_mode && (
+                <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 h-4 border-amber-500/40 text-amber-400">DRY RUN</Badge>
+              )}
+              {tab === 'Automation' && config?.automation?.enabled && (
+                <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 h-4 border-emerald-500/40 text-emerald-400">ON</Badge>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl">
-          {TAB_PANELS[activeTab]}
+        <Separator className="flex-shrink-0" />
+
+        <div className="flex-1 overflow-y-auto pt-4">
+          <div className="max-w-3xl">
+            {TAB_PANELS[activeTab]}
+          </div>
         </div>
-      </div>
+      </Tabs>
     </div>
   )
 }

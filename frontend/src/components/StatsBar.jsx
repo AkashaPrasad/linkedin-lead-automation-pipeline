@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { Search, CheckCircle2, Mail, Send } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 function AnimatedNumber({ value }) {
   const [display, setDisplay] = useState(0)
@@ -33,29 +36,33 @@ function AnimatedNumber({ value }) {
 }
 
 const CARDS = [
-  { key: 'scraped', label: 'Posts Scraped', icon: '🔍', color: 'text-purple-light', border: 'border-purple-primary/20' },
-  { key: 'real', label: 'Real Leads', icon: '✅', color: 'text-green-accent', border: 'border-green-accent/20' },
-  { key: 'enriched', label: 'Emails Found', icon: '✉', color: 'text-amber-accent', border: 'border-amber-accent/20' },
-  { key: 'sent', label: 'Emails Sent', icon: '🚀', color: 'text-blue-400', border: 'border-blue-400/20' },
+  { key: 'scraped', label: 'Posts Scraped', icon: Search, color: 'text-primary' },
+  { key: 'real', label: 'Real Leads', icon: CheckCircle2, color: 'text-emerald-400' },
+  { key: 'enriched', label: 'Emails Found', icon: Mail, color: 'text-amber-400' },
+  { key: 'sent', label: 'Emails Sent', icon: Send, color: 'text-sky-400' },
 ]
 
 export default function StatsBar({ stats }) {
   return (
     <div className="grid grid-cols-4 gap-4">
-      {CARDS.map(card => (
-        <div
-          key={card.key}
-          className={`bg-bg-secondary rounded-xl p-4 border ${card.border} card-border`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-lg">{card.icon}</span>
-            <span className="text-xs text-text-muted font-medium uppercase tracking-wide">{card.label}</span>
-          </div>
-          <div className={`text-3xl font-bold ${card.color}`}>
-            <AnimatedNumber value={stats[card.key] || 0} />
-          </div>
-        </div>
-      ))}
+      {CARDS.map(card => {
+        const Icon = card.icon
+        return (
+          <Card key={card.key} className="border-border/80 bg-card transition-colors hover:border-primary/30">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className={cn('flex items-center justify-center w-8 h-8 rounded-lg bg-secondary', card.color)}>
+                  <Icon className="w-4 h-4" strokeWidth={2} />
+                </div>
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{card.label}</span>
+              </div>
+              <div className={cn('text-3xl font-bold tabular-nums', card.color)}>
+                <AnimatedNumber value={stats[card.key] || 0} />
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }

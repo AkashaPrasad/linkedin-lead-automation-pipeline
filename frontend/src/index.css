@@ -34,6 +34,50 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #7C3AED;
   }
+  /*
+   * Dark-only app (no light-mode toggle) — the same values are set on both
+   * :root and .dark so shadcn components render correctly whether or not
+   * the .dark class is present. Values are raw HSL triplets (not oklch())
+   * because tailwind.config.js wraps them as hsl(var(--x)) — oklch(...)
+   * values here would silently produce an invalid hsl(oklch(...)) color.
+   * Mapped 1:1 from the existing brand palette above so shadcn primitives
+   * (Button, Card, Dialog, ...) match the app's purple identity exactly.
+   */
+  :root, .dark {
+    --background: 240 20% 4.9%;           /* bg-primary #0A0A0F */
+    --foreground: 210 40% 96.1%;          /* text-primary #F1F5F9 */
+    --card: 240 17.1% 8%;                 /* bg-secondary #111118 */
+    --card-foreground: 210 40% 96.1%;
+    --popover: 240 17.1% 8%;
+    --popover-foreground: 210 40% 96.1%;
+    --primary: 262.1 83.3% 57.8%;         /* purple-primary #7C3AED */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 17.5% 12.4%;         /* bg-tertiary #1A1A25 */
+    --secondary-foreground: 210 40% 96.1%;
+    --muted: 240 17.5% 12.4%;
+    --muted-foreground: 215 20.2% 65.1%;  /* text-secondary #94A3B8 */
+    --accent: 240 17.5% 16%;
+    --accent-foreground: 210 40% 96.1%;
+    --destructive: 0 84.2% 60.2%;         /* red-accent #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 21.1% 14.9%;            /* border-color #1E1E2E */
+    --input: 240 21.1% 14.9%;
+    --ring: 262.1 83.3% 57.8%;            /* purple-primary, focus rings */
+    --chart-1: 262.1 83.3% 57.8%;         /* purple */
+    --chart-2: 160.1 84.1% 39.4%;         /* green-accent */
+    --chart-3: 37.7 92.1% 50.2%;          /* amber-accent */
+    --chart-4: 0 84.2% 60.2%;             /* red-accent */
+    --chart-5: 270.7 91% 65.1%;           /* purple-light */
+    --radius: 0.75rem;
+    --sidebar: 240 17.1% 8%;
+    --sidebar-foreground: 210 40% 96.1%;
+    --sidebar-primary: 262.1 83.3% 57.8%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 17.5% 16%;
+    --sidebar-accent-foreground: 210 40% 96.1%;
+    --sidebar-border: 240 21.1% 14.9%;
+    --sidebar-ring: 262.1 83.3% 57.8%;
+  }
 }
 
 @layer utilities {

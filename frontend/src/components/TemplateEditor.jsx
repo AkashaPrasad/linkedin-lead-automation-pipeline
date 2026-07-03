@@ -1,4 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
+import {
+  HelpCircle, Send, Eye, EyeOff, Save, Loader2, CheckCircle2, AlertTriangle,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { cn } from '@/lib/utils'
 
 const SERVICE_CATEGORIES = ['Growth', 'Production', 'Influencer Marketing', 'Branding']
 // "Creative" (main) is the parent fallback — used when the AI knows the lead is a
@@ -8,17 +22,17 @@ const CREATIVE_SUBCATEGORIES = ['Creative - FMCG', 'Creative - Real Estate', 'Cr
 const CATEGORIES = [...SERVICE_CATEGORIES, CREATIVE_MAIN, ...CREATIVE_SUBCATEGORIES, 'Generic']
 
 const CATEGORY_COLORS = {
-  'Growth': 'text-green-accent border-green-accent/30 bg-green-accent/5',
-  'Production': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
-  'Influencer Marketing': 'text-orange-400 border-orange-400/30 bg-orange-400/5',
-  'Branding': 'text-amber-accent border-amber-accent/30 bg-amber-accent/5',
-  'Creative': 'text-purple-light border-purple-primary/40 bg-purple-primary/10',
-  'Creative - FMCG': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Creative - Real Estate': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Creative - Apparel': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Creative - Kids': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Creative - Beauty': 'text-purple-light border-purple-primary/30 bg-purple-primary/5',
-  'Generic': 'text-text-secondary border-border-color bg-bg-tertiary',
+  'Growth': 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',
+  'Production': 'text-sky-400 border-sky-500/30 bg-sky-500/5',
+  'Influencer Marketing': 'text-orange-400 border-orange-500/30 bg-orange-500/5',
+  'Branding': 'text-amber-400 border-amber-500/30 bg-amber-500/5',
+  'Creative': 'text-primary border-primary/40 bg-primary/10',
+  'Creative - FMCG': 'text-primary border-primary/30 bg-primary/5',
+  'Creative - Real Estate': 'text-primary border-primary/30 bg-primary/5',
+  'Creative - Apparel': 'text-primary border-primary/30 bg-primary/5',
+  'Creative - Kids': 'text-primary border-primary/30 bg-primary/5',
+  'Creative - Beauty': 'text-primary border-primary/30 bg-primary/5',
+  'Generic': 'text-muted-foreground border-border bg-secondary',
 }
 
 const VARIABLES = [
@@ -43,6 +57,9 @@ const VARIABLES = [
 ]
 
 // ── Highlighted textarea (overlay technique) ──────────────────────────────────
+// Bespoke DOM-overlay text highlighting — not something a shadcn primitive
+// replaces, left as-is functionally. Colors are kept literal since they render
+// into a raw HTML string via dangerouslySetInnerHTML, not Tailwind classes.
 function HighlightTextarea({ value, onChange }) {
   const textareaRef = useRef(null)
   const backdropRef = useRef(null)
@@ -137,26 +154,24 @@ function HighlightTextarea({ value, onChange }) {
 function VarStatus({ body }) {
   return (
     <div className="flex items-start gap-4 flex-shrink-0">
-      <span className="text-xs text-text-muted font-medium pt-0.5 flex-shrink-0">Variables:</span>
+      <span className="text-xs text-muted-foreground font-medium pt-0.5 flex-shrink-0">Variables:</span>
       <div className="flex flex-wrap gap-2">
         {VARIABLES.map(v => {
           const found = body.includes(v.key)
           return (
             <div key={v.key} className="group relative">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border transition-colors ${
-                found
-                  ? 'bg-purple-primary/10 text-purple-light border-purple-primary/30'
-                  : 'bg-bg-tertiary text-text-muted border-border-color'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${found ? 'bg-purple-light' : 'bg-text-muted'}`} />
+              <span className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border transition-colors',
+                found ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary text-muted-foreground border-border'
+              )}>
+                <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', found ? 'bg-primary' : 'bg-muted-foreground')} />
                 {v.key}
-                {found ? ' ✓' : ''}
+                {found && <CheckCircle2 className="w-3 h-3" />}
               </span>
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-bg-primary border border-border-color rounded-lg text-xs text-text-secondary hidden group-hover:block z-20 shadow-xl">
-                <p className="font-semibold text-text-primary mb-1">{v.key}</p>
+              <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-popover border border-border rounded-lg text-xs text-muted-foreground hidden group-hover:block z-20 shadow-xl">
+                <p className="font-semibold text-foreground mb-1">{v.key}</p>
                 <p className="leading-relaxed mb-2">{v.description}</p>
-                <p className="text-text-muted">Example: <span className="text-purple-light">{v.example}</span></p>
+                <p className="text-muted-foreground">Example: <span className="text-primary">{v.example}</span></p>
               </div>
             </div>
           )
@@ -173,28 +188,26 @@ function VariableReference() {
     <div className="flex-shrink-0">
       <button
         onClick={() => setOpen(o => !o)}
-        className="text-xs text-purple-light hover:text-purple-primary flex items-center gap-1 transition-colors"
+        className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
       >
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4M12 8h.01" />
-        </svg>
+        <HelpCircle className="w-3 h-3" />
         What are these variables?
       </button>
       {open && (
-        <div className="mt-3 p-4 bg-bg-primary border border-border-color rounded-xl space-y-3">
-          <p className="text-xs font-semibold text-text-primary">Variables are auto-filled for each lead at send time:</p>
+        <div className="mt-3 p-4 bg-background border border-border rounded-xl space-y-3">
+          <p className="text-xs font-semibold text-foreground">Variables are auto-filled for each lead at send time:</p>
           {VARIABLES.map(v => (
             <div key={v.key} className="flex gap-3">
-              <code className="text-xs text-purple-light font-mono flex-shrink-0 pt-0.5 w-36">{v.key}</code>
+              <code className="text-xs text-primary font-mono flex-shrink-0 pt-0.5 w-36">{v.key}</code>
               <div>
-                <p className="text-xs text-text-secondary leading-relaxed">{v.description}</p>
-                <p className="text-xs text-text-muted mt-0.5">e.g. <span className="text-text-secondary">"{v.example}"</span></p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{v.description}</p>
+                <p className="text-xs text-muted-foreground/70 mt-0.5">e.g. <span className="text-muted-foreground">"{v.example}"</span></p>
               </div>
             </div>
           ))}
-          <p className="text-xs text-amber-accent/80 border-t border-border-color pt-3">
-            ⚠ If a variable can't be extracted (e.g. no "at" in headline), a sensible fallback is used.
+          <p className="text-xs text-amber-400/80 border-t border-border pt-3 flex items-start gap-1.5">
+            <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+            If a variable can't be extracted (e.g. no "at" in headline), a sensible fallback is used.
           </p>
         </div>
       )}
@@ -203,7 +216,7 @@ function VariableReference() {
 }
 
 // ── Test email modal ──────────────────────────────────────────────────────────
-function TestEmailModal({ defaultCategory, templates, onClose }) {
+function TestEmailModal({ open, defaultCategory, templates, onClose }) {
   const [email, setEmail] = useState('')
   const [category, setCategory] = useState(defaultCategory)
   const [vars, setVars] = useState({
@@ -253,80 +266,60 @@ function TestEmailModal({ defaultCategory, templates, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-secondary border border-border-color rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-color flex-shrink-0">
-          <div>
-            <h3 className="text-base font-bold text-text-primary">Send Test Email</h3>
-            <p className="text-xs text-text-muted mt-0.5">See exactly what the lead will receive</p>
-          </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 py-4 border-b border-border flex-shrink-0">
+          <DialogTitle>Send Test Email</DialogTitle>
+          <DialogDescription>See exactly what the lead will receive</DialogDescription>
+        </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Recipient */}
-          <div>
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wide block mb-1.5">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
               Send to (your email to test)
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full bg-bg-tertiary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-purple-primary/50 transition-colors"
-            />
+            </Label>
+            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
           </div>
 
-          {/* Category */}
-          <div>
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wide block mb-1.5">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
               Template Category
-            </label>
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              className="w-full bg-bg-tertiary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
-            >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            </Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Test variable values */}
           <div>
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wide block mb-2">
+            <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide block mb-2">
               Test Variable Values
-            </label>
+            </Label>
             <div className="space-y-3">
               {VARIABLES.map(v => (
-                <div key={v.key}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <code className="text-xs text-purple-light font-mono">{v.key}</code>
-                    <span className="text-xs text-text-muted">— {v.description.split('(')[0].trim()}</span>
+                <div key={v.key} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs text-primary font-mono">{v.key}</code>
+                    <span className="text-xs text-muted-foreground">— {v.description.split('(')[0].trim()}</span>
                   </div>
-                  <input
-                    type="text"
+                  <Input
                     value={vars[v.label] || ''}
                     onChange={e => setVars(p => ({ ...p, [v.label]: e.target.value }))}
-                    className="w-full bg-bg-tertiary border border-border-color rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
                   />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Preview toggle */}
           <div>
             <button
               onClick={() => setShowPreview(p => !p)}
-              className="text-xs text-purple-light hover:underline"
+              className="text-xs text-primary hover:underline flex items-center gap-1"
             >
-              {showPreview ? '▲ Hide email preview' : '▼ Show email preview'}
+              {showPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              {showPreview ? 'Hide email preview' : 'Show email preview'}
             </button>
             {showPreview && (
               <div className="mt-3 bg-white rounded-xl p-5 overflow-auto max-h-60">
@@ -340,54 +333,29 @@ function TestEmailModal({ defaultCategory, templates, onClose }) {
             )}
           </div>
 
-          {/* Status */}
           {status === 'success' && (
-            <div className="flex items-center gap-2 p-3 bg-green-accent/10 border border-green-accent/30 rounded-lg">
-              <span className="text-green-accent">✓</span>
-              <p className="text-sm text-green-accent font-medium">Email sent successfully! Check your inbox.</p>
-            </div>
+            <Alert className="border-emerald-500/30 bg-emerald-500/10">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <AlertDescription className="text-emerald-400 font-medium">Email sent successfully! Check your inbox.</AlertDescription>
+            </Alert>
           )}
           {status === 'error' && (
-            <div className="flex items-start gap-2 p-3 bg-red-accent/10 border border-red-accent/30 rounded-lg">
-              <span className="text-red-accent mt-0.5">⚠</span>
-              <p className="text-sm text-red-accent">{errMsg}</p>
-            </div>
-          )}
-          {errMsg && status !== 'error' && (
-            <p className="text-xs text-red-accent">{errMsg}</p>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{errMsg}</AlertDescription>
+            </Alert>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-color flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-border-color text-text-secondary text-sm hover:text-text-primary transition-colors"
-          >
-            Close
-          </button>
-          <button
-            onClick={send}
-            disabled={status === 'sending'}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              status === 'sending'
-                ? 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-                : 'bg-purple-primary text-white hover:bg-purple-primary/90'
-            }`}
-          >
-            {status === 'sending' ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Sending...
-              </>
-            ) : 'Send Test Email'}
-          </button>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border flex-shrink-0">
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button onClick={send} disabled={status === 'sending'} className="gap-2">
+            {status === 'sending' && <Loader2 className="w-4 h-4 animate-spin" />}
+            {status === 'sending' ? 'Sending...' : 'Send Test Email'}
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -433,8 +401,9 @@ export default function TemplateEditor() {
       })
       setSaved(JSON.parse(JSON.stringify(templates)))
       setLastEdited(prev => ({ ...prev, [activeCategory]: new Date().toLocaleTimeString() }))
+      toast.success('Template saved')
     } catch (e) {
-      alert('Save failed: ' + e.message)
+      toast.error('Save failed: ' + e.message)
     }
     setSaving(false)
   }
@@ -453,7 +422,7 @@ export default function TemplateEditor() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-purple-primary border-t-transparent rounded-full animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     )
   }
@@ -463,37 +432,22 @@ export default function TemplateEditor() {
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h2 className="text-lg font-bold text-text-primary">Email Templates</h2>
-          <p className="text-xs text-text-muted mt-0.5">Edit the personalised email for each lead category — variables highlight as you type</p>
+          <h2 className="text-lg font-bold text-foreground">Email Templates</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Edit the personalised email for each lead category — variables highlight as you type</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowTestModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-accent/30 text-amber-accent text-sm hover:bg-amber-accent/5 transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
-            </svg>
+          <Button variant="outline" className="gap-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/5 hover:text-amber-400" onClick={() => setShowTestModal(true)}>
+            <Send className="w-4 h-4" />
             Test Email
-          </button>
-          <button
-            onClick={() => setShowPreview(p => !p)}
-            className="px-4 py-2 rounded-lg border border-border-color text-text-secondary text-sm hover:text-text-primary hover:border-purple-primary/30 transition-colors"
-          >
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setShowPreview(p => !p)}>
+            {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             {showPreview ? 'Hide Preview' : 'Preview'}
-          </button>
-          <button
-            onClick={save}
-            disabled={!isDirty || saving}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              isDirty && !saving
-                ? 'bg-purple-primary text-white hover:bg-purple-primary/90'
-                : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-            }`}
-          >
+          </Button>
+          <Button onClick={save} disabled={!isDirty || saving} className="gap-2">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? 'Saving...' : isDirty ? 'Save Changes' : 'Saved'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -504,49 +458,46 @@ export default function TemplateEditor() {
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                activeCategory === cat
-                  ? CATEGORY_COLORS[cat]
-                  : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
-              }`}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium border transition-all',
+                activeCategory === cat ? CATEGORY_COLORS[cat] : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-secondary'
+              )}
             >
               {cat}
               {JSON.stringify(templates[cat]) !== JSON.stringify(saved[cat]) && (
-                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
+                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
               )}
             </button>
           ))}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <span className="text-xs text-text-muted font-semibold uppercase tracking-wide pr-1">Creative:</span>
+          <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide pr-1">Creative:</span>
           <button
             onClick={() => setActiveCategory(CREATIVE_MAIN)}
             title="Fallback used when the AI knows it's a creative-type ask but the industry doesn't fit any sub-category below"
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
-              activeCategory === CREATIVE_MAIN
-                ? CATEGORY_COLORS[CREATIVE_MAIN]
-                : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-semibold border transition-all',
+              activeCategory === CREATIVE_MAIN ? CATEGORY_COLORS[CREATIVE_MAIN] : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-secondary'
+            )}
           >
             Main
             {JSON.stringify(templates[CREATIVE_MAIN]) !== JSON.stringify(saved[CREATIVE_MAIN]) && (
-              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
+              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
             )}
           </button>
-          <span className="w-px h-5 bg-border-color" />
+          <Separator orientation="vertical" className="h-5" />
           {CREATIVE_SUBCATEGORIES.map(cat => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                activeCategory === cat
-                  ? CATEGORY_COLORS[cat]
-                  : 'text-text-muted border-transparent hover:text-text-primary hover:bg-bg-tertiary'
-              }`}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium border transition-all',
+                activeCategory === cat ? CATEGORY_COLORS[cat] : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-secondary'
+              )}
             >
               {cat.replace('Creative - ', '')}
               {JSON.stringify(templates[cat]) !== JSON.stringify(saved[cat]) && (
-                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-accent inline-block" />
+                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
               )}
             </button>
           ))}
@@ -554,29 +505,25 @@ export default function TemplateEditor() {
       </div>
 
       {/* Editor + preview */}
-      <div className={`flex-1 grid gap-4 min-h-0 ${showPreview ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div className={cn('flex-1 grid gap-4 min-h-0', showPreview ? 'grid-cols-2' : 'grid-cols-1')}>
         {/* Editor column */}
         <div className="flex flex-col gap-3 min-h-0">
-          {/* Subject */}
-          <div className="flex-shrink-0">
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wide block mb-1.5">
+          <div className="flex-shrink-0 space-y-1.5">
+            <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
               Subject Line
-            </label>
+            </Label>
             <div className="relative">
-              <input
-                type="text"
+              <Input
                 value={current.subject || ''}
                 onChange={e => update('subject', e.target.value)}
-                className="w-full bg-bg-secondary border border-border-color rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-purple-primary/50 transition-colors"
                 placeholder="Email subject..."
               />
-              {/* Highlight variables in subject preview */}
               {current.subject && /\{\{[^}]+\}\}/.test(current.subject) && (
-                <div className="absolute inset-0 px-4 py-2.5 pointer-events-none flex items-center">
+                <div className="absolute inset-0 px-3 pointer-events-none flex items-center">
                   <span className="text-sm">
                     {current.subject.split(/(\{\{[^}]+\}\})/g).map((part, i) =>
                       /^\{\{/.test(part)
-                        ? <span key={i} className="text-purple-light">{part}</span>
+                        ? <span key={i} className="text-primary">{part}</span>
                         : <span key={i} className="text-transparent">{part}</span>
                     )}
                   </span>
@@ -585,19 +532,17 @@ export default function TemplateEditor() {
             </div>
           </div>
 
-          {/* Body */}
           <div className="flex-1 flex flex-col min-h-0 gap-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs text-text-muted font-medium uppercase tracking-wide">
+              <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                 Email Body
-              </label>
+              </Label>
               {lastEdited[activeCategory] && (
-                <span className="text-xs text-text-muted">Saved {lastEdited[activeCategory]}</span>
+                <span className="text-xs text-muted-foreground">Saved {lastEdited[activeCategory]}</span>
               )}
             </div>
 
-            {/* Textarea with highlight overlay */}
-            <div className="flex-1 min-h-0 bg-bg-secondary border border-border-color rounded-lg overflow-hidden focus-within:border-purple-primary/50 transition-colors flex flex-col">
+            <div className="flex-1 min-h-0 bg-card border border-border rounded-lg overflow-hidden focus-within:border-primary/50 transition-colors flex flex-col">
               <HighlightTextarea
                 value={current.body || ''}
                 onChange={v => update('body', v)}
@@ -605,7 +550,6 @@ export default function TemplateEditor() {
             </div>
           </div>
 
-          {/* Variable status + reference */}
           <div className="flex-shrink-0 space-y-2">
             <VarStatus body={current.body || ''} />
             <VariableReference />
@@ -615,9 +559,9 @@ export default function TemplateEditor() {
         {/* Preview column */}
         {showPreview && (
           <div className="flex flex-col gap-3 min-h-0">
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wide flex-shrink-0">
+            <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex-shrink-0">
               Preview (with sample data)
-            </label>
+            </Label>
             <div className="flex-1 bg-white rounded-xl overflow-auto p-6 min-h-0">
               <div className="mb-4 pb-4 border-b border-gray-200">
                 <p className="text-xs text-gray-400 mb-1">Subject</p>
@@ -631,14 +575,12 @@ export default function TemplateEditor() {
         )}
       </div>
 
-      {/* Test email modal */}
-      {showTestModal && (
-        <TestEmailModal
-          defaultCategory={activeCategory}
-          templates={templates}
-          onClose={() => setShowTestModal(false)}
-        />
-      )}
+      <TestEmailModal
+        open={showTestModal}
+        defaultCategory={activeCategory}
+        templates={templates}
+        onClose={() => setShowTestModal(false)}
+      />
     </div>
   )
 }
