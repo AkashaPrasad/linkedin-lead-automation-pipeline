@@ -3,11 +3,15 @@ Manual Leads sheet — real leads that ended up with NO_EMAIL (Apollo found
 nothing and the post itself had no email) still deserve outreach, just via a
 manual LinkedIn DM instead of an automated email. Those leads get written to
 a SEPARATE spreadsheet (MANUAL_LEADS_SHEET_ID) with a colored Status dropdown
-("Not sent" / "Sent") so a human can work through them and mark each one once
-DM'd. Before every real pipeline run, we read that sheet and transfer any row
-marked "Sent" (and not yet transferred) into the Master sheet — Master's
-sent-only contract (see sheets_writer.append_sent_to_master) treats a manual
-DM exactly like an email send: it's a real, successful contact.
+("Not sent" red / "Sent" green / "Skipped" gray) so a human can work through
+them, mark each one once DM'd, or mark it "Skipped" if it turns out not to be
+a real lead after all. Before every real pipeline run, we read that sheet and
+transfer any row marked "Sent" (and not yet transferred) into the Master
+sheet — Master's sent-only contract (see sheets_writer.append_sent_to_master)
+treats a manual DM exactly like an email send: it's a real, successful
+contact. "Skipped" rows are never written to Master — the sync only ever
+looks for STATUS_SENT (see _sync_sent_to_master_sync), so anything else,
+"Not sent" or "Skipped" alike, is simply left alone.
 """
 import asyncio
 from datetime import datetime
@@ -30,11 +34,17 @@ COLUMNS = {
 
 STATUS_NOT_SENT = "Not sent"
 STATUS_SENT = "Sent"
+# For a post that turns out NOT to be a real lead once a human looks at it —
+# never synced to Master (see _sync_sent_to_master_sync, which only ever
+# looks for STATUS_SENT rows; anything else, including this one, is ignored).
+STATUS_SKIPPED = "Skipped"
 
 _RED_BG = {"red": 0.96, "green": 0.80, "blue": 0.80}
 _RED_TEXT = {"red": 0.60, "green": 0.0, "blue": 0.0}
 _GREEN_BG = {"red": 0.80, "green": 0.94, "blue": 0.80}
 _GREEN_TEXT = {"red": 0.0, "green": 0.45, "blue": 0.0}
+_GRAY_BG = {"red": 0.88, "green": 0.88, "blue": 0.88}
+_GRAY_TEXT = {"red": 0.40, "green": 0.40, "blue": 0.40}
 
 
 def is_configured() -> bool:
@@ -55,18 +65,30 @@ def _open_sync():
 
 
 def _setup_sheet_sync(ws) -> None:
-    """Writes the header row and — ONLY the very first time (detected by the
-    header row not existing yet) — sets up the Status column's dropdown and
-    red/green conditional formatting. Re-running addConditionalFormatRule on
-    every pipeline run would stack duplicate rules forever, so this must be
-    a one-time setup, not something that fires on every call."""
-    first_row = ws.row_values(1)
-    if first_row == HEADERS:
-        return  # already set up — never re-apply validation/formatting
+    """Ensures the header row is correct and — ONLY the very first time —
+    sets up the Status column's dropdown and red/green conditional
+    formatting. NEVER clears the sheet: a fragile "does row 1 exactly match"
+    comparison used to gate a destructive ws.clear() call here, which wiped
+    every data row (not just the header) on any mismatch — including a
+    false mismatch caused by nothing more than a transient/stale read. This
+    was a real incident (all backfilled leads were lost). Fixed by (a) never
+    calling clear(), only ever overwriting row 1 in place, and (b) detecting
+    "first-time setup" via whether conditional format rules already exist on
+    this sheet — a durable signal — instead of exact-matching the header row."""
+    if first_row := ws.row_values(1):
+        if first_row != HEADERS:
+            ws.update([HEADERS], "A1")  # fix header in place, never touch other rows
+    else:
+        ws.update([HEADERS], "A1")
 
-    if first_row:
-        ws.clear()
-    ws.insert_row(HEADERS, 1)
+    try:
+        meta = ws.spreadsheet.fetch_sheet_metadata()
+        sheet_meta = next(s for s in meta["sheets"] if s["properties"]["sheetId"] == ws.id)
+        if sheet_meta.get("conditionalFormats"):
+            return  # dropdown + colors already set up — never re-apply
+    except Exception as e:
+        log.warning(f"Manual Leads: could not check existing conditional formats, skipping setup to be safe: {e}")
+        return
 
     sheet_id = ws.id
     status_col = COLUMNS["status"]
@@ -87,6 +109,7 @@ def _setup_sheet_sync(ws) -> None:
                         "values": [
                             {"userEnteredValue": STATUS_NOT_SENT},
                             {"userEnteredValue": STATUS_SENT},
+                            {"userEnteredValue": STATUS_SKIPPED},
                         ],
                     },
                     "showCustomUi": True,
@@ -116,6 +139,18 @@ def _setup_sheet_sync(ws) -> None:
                     },
                 },
                 "index": 1,
+            }
+        },
+        {
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [full_range],
+                    "booleanRule": {
+                        "condition": {"type": "TEXT_EQ", "values": [{"userEnteredValue": STATUS_SKIPPED}]},
+                        "format": {"backgroundColor": _GRAY_BG, "textFormat": {"foregroundColor": _GRAY_TEXT, "bold": True}},
+                    },
+                },
+                "index": 2,
             }
         },
     ]
@@ -180,7 +215,14 @@ async def append_manual_leads(posts: list[dict], emit=None) -> int:
             return 0
 
         rows = [_post_to_manual_row(p) for p in new_posts]
-        await asyncio.to_thread(lambda: ws.append_rows(rows, value_input_option="RAW"))
+        # insert_data_option=INSERT_ROWS is required — the Sheets API default
+        # (OVERWRITE) can silently clobber an existing row if its table-
+        # boundary heuristic is ever ambiguous. This exact gap caused a
+        # confirmed real row loss earlier; do not remove this parameter.
+        from gspread.utils import InsertDataOption
+        await asyncio.to_thread(
+            lambda: ws.append_rows(rows, value_input_option="RAW", insert_data_option=InsertDataOption.insert_rows)
+        )
         log.info(f"Manual Leads: appended {len(rows)} NO_EMAIL leads for manual LinkedIn DM")
         if emit:
             await emit({"event": "progress", "stage": 9,
@@ -240,7 +282,8 @@ def _sync_sent_to_master_sync(manual_ws, master_ws) -> int:
         return 0
 
     assert len(master_rows[0]) == len(MASTER_HEADERS), "Manual-to-Master row width drifted from Master schema"
-    master_ws.append_rows(master_rows, value_input_option="RAW")
+    from gspread.utils import InsertDataOption
+    master_ws.append_rows(master_rows, value_input_option="RAW", insert_data_option=InsertDataOption.insert_rows)
 
     # Mark each transferred row as synced (and backfill Sent Timestamp if the
     # user left it blank) so it's never transferred twice.

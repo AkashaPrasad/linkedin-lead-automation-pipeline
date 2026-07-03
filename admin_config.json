@@ -221,8 +221,11 @@
       "Restaurants",
       "Cosmetics"
     ],
-    "author_geo_ids": [],
-    "min_post_length": 50
+    "author_geo_ids": [
+      "102713980"
+    ],
+    "min_post_length": 50,
+    "use_cookie_actor": false
   },
   "filtering": {
     "gpt_filter_enabled": true,
@@ -251,6 +254,7 @@
     "times": [
       "09:00"
     ],
+    "time_query_sets": {},
     "timezone": "Asia/Kolkata"
   }
 }

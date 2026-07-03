@@ -178,7 +178,7 @@ def _log_scheduled_abort(status: str, message: str) -> None:
     })
 
 
-async def _scheduled_pipeline_run():
+async def _scheduled_pipeline_run(query_set: str | None = None):
     global _is_running, _current_task
 
     if _is_running:
@@ -227,11 +227,14 @@ async def _scheduled_pipeline_run():
 
     _is_running = True
     _event_history.clear()
-    log.info("Scheduled pipeline run starting")
-    await send_alert("⏰ Scheduled pipeline run starting")
+    folder_note = f" (query folder: '{query_set}')" if query_set else ""
+    log.info(f"Scheduled pipeline run starting{folder_note}")
+    await send_alert(f"⏰ Scheduled pipeline run starting{folder_note}")
 
     try:
-        _current_task = asyncio.create_task(_pipeline_run_core(run_pipeline_async))
+        _current_task = asyncio.create_task(
+            _pipeline_run_core(lambda emit: run_pipeline_async(emit, query_set_override=query_set))
+        )
         await asyncio.wait_for(_current_task, timeout=AUTOMATION_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         log.error(f"Scheduled run exceeded {AUTOMATION_TIMEOUT_SECONDS}s — cancelling")

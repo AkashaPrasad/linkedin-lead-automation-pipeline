@@ -151,9 +151,32 @@ async def _run_stages_6_to_9(
     })
 
 
-async def run_pipeline_async(emit):
+async def run_pipeline_async(emit, query_set_override: str | None = None):
     from admin_config import load as load_cfg
     cfg = load_cfg()
+
+    # A scheduled run can pin a specific saved query folder to its time slot
+    # (Admin Panel → Automation) instead of using whatever's currently the
+    # active/default list. Swap it in before Stage 1 even starts. Manual runs
+    # and runs with no override (query_set_override=None) are completely
+    # unaffected — this only ever changes scraping.search_queries in memory
+    # for THIS run, never persists back to admin_config.json.
+    if query_set_override:
+        query_sets = cfg.get("scraping", {}).get("query_sets", {})
+        override_queries = query_sets.get(query_set_override)
+        if override_queries:
+            cfg = {**cfg, "scraping": {**cfg.get("scraping", {}), "search_queries": list(override_queries)}}
+            log.info(f"Scheduled run: using query folder '{query_set_override}' ({len(override_queries)} queries)")
+            await send_alert(f"📁 Using query folder '{query_set_override}' for this run ({len(override_queries)} queries)")
+        else:
+            log.warning(
+                f"Scheduled run: query folder '{query_set_override}' not found "
+                f"(may have been renamed/deleted) — falling back to the default query list"
+            )
+            await send_alert(
+                f"⚠ Scheduled query folder '{query_set_override}' no longer exists — "
+                f"using the default query list instead"
+            )
 
     filtering = cfg.get("filtering", {})
     sending = cfg.get("sending", {})

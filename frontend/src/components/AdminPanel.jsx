@@ -167,10 +167,14 @@ function EditableList({ items, onChange, placeholder = 'Add item...', addLabel =
 // ── Query folder manager ─────────────────────────────────────────────────────
 // Proper folder CRUD: "+ New Folder" always creates a BLANK set and switches to
 // it immediately — no more inheriting whatever the previous folder's list held.
-function QueryFolderManager({ s, setMany }) {
+function QueryFolderManager({ cfg, onChange }) {
+  const s = cfg.scraping || {}
+  const a = cfg.automation || {}
   const querySets = s.query_sets || {}
   const activeSet = s.active_query_set || ''
   const setNames = Object.keys(querySets)
+
+  const setMany = (patch) => onChange({ ...cfg, scraping: { ...s, ...patch } })
 
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -195,6 +199,26 @@ function QueryFolderManager({ s, setMany }) {
     toast.success(`Folder "${trimmed}" created — add queries below`)
   }
 
+  // Automation's per-time-slot folder assignments (Admin Panel → Automation)
+  // reference folders by name — keep them in sync so a rename/delete here
+  // never leaves a schedule silently pointing at a name that no longer
+  // exists (the backend already falls back safely either way, but this
+  // avoids the confusing dangling reference in the UI).
+  const remapTimeQuerySets = (oldName, newNameOrNull) => {
+    const map = a.time_query_sets || {}
+    if (!Object.values(map).includes(oldName)) return null
+    const next = {}
+    for (const [time, folder] of Object.entries(map)) {
+      if (folder === oldName) {
+        if (newNameOrNull) next[time] = newNameOrNull
+        // else: drop the entry entirely -> falls back to Default
+      } else {
+        next[time] = folder
+      }
+    }
+    return next
+  }
+
   const renameFolder = (oldName) => {
     const trimmed = renameValue.trim()
     if (!trimmed || trimmed === oldName) { setRenamingName(null); return }
@@ -204,10 +228,16 @@ function QueryFolderManager({ s, setMany }) {
     delete next[oldName]
     next[trimmed] = queries
     const isActive = activeSet === oldName
-    setMany({
-      query_sets: next,
-      active_query_set: isActive ? trimmed : activeSet,
-      ...(isActive ? { search_queries: [...queries] } : {}),
+    const remappedTimeQuerySets = remapTimeQuerySets(oldName, trimmed)
+    onChange({
+      ...cfg,
+      scraping: {
+        ...s,
+        query_sets: next,
+        active_query_set: isActive ? trimmed : activeSet,
+        ...(isActive ? { search_queries: [...queries] } : {}),
+      },
+      ...(remappedTimeQuerySets ? { automation: { ...a, time_query_sets: remappedTimeQuerySets } } : {}),
     })
     setRenamingName(null)
   }
@@ -217,11 +247,14 @@ function QueryFolderManager({ s, setMany }) {
     delete next[name]
     const remaining = Object.keys(next)
     const fallback = remaining[0] || ''
-    if (activeSet === name) {
-      setMany({ query_sets: next, active_query_set: fallback, search_queries: [...(next[fallback] || [])] })
-    } else {
-      setMany({ query_sets: next })
-    }
+    const remappedTimeQuerySets = remapTimeQuerySets(name, null)
+    onChange({
+      ...cfg,
+      scraping: activeSet === name
+        ? { ...s, query_sets: next, active_query_set: fallback, search_queries: [...(next[fallback] || [])] }
+        : { ...s, query_sets: next },
+      ...(remappedTimeQuerySets ? { automation: { ...a, time_query_sets: remappedTimeQuerySets } } : {}),
+    })
     setDeleteTarget(null)
   }
 
@@ -448,7 +481,7 @@ function ScrapingTab({ cfg, onChange }) {
           label="Folders"
           hint="Organize keyword lists into folders and switch between them. New Folder starts blank — add queries below, they save into that folder automatically."
         >
-          <QueryFolderManager s={s} setMany={setMany} />
+          <QueryFolderManager cfg={cfg} onChange={onChange} />
         </Field>
       </div>
 
@@ -736,28 +769,65 @@ const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' }
 const TIMEZONES = ['Asia/Kolkata', 'UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Asia/Dubai']
 
-function TimeList({ times, onChange }) {
+const DEFAULT_FOLDER_VALUE = '__default__'
+
+// Each scheduled time can optionally pin a specific saved search-query
+// folder — if none is chosen, that time slot runs whatever folder is
+// currently active/default (today's behavior, unchanged).
+function TimeList({ times, timeQuerySets, querySetNames, onChange }) {
   const [newTime, setNewTime] = useState('09:00')
+  const [newFolder, setNewFolder] = useState(DEFAULT_FOLDER_VALUE)
 
   const add = () => {
-    if (newTime && !times.includes(newTime)) {
-      onChange([...times, newTime].sort())
-    }
+    if (!newTime || times.includes(newTime)) return
+    const nextTimes = [...times, newTime].sort()
+    const nextMap = { ...timeQuerySets }
+    if (newFolder !== DEFAULT_FOLDER_VALUE) nextMap[newTime] = newFolder
+    onChange(nextTimes, nextMap)
+    setNewFolder(DEFAULT_FOLDER_VALUE)
   }
 
-  const remove = (t) => onChange(times.filter(x => x !== t))
+  const remove = (t) => {
+    const nextMap = { ...timeQuerySets }
+    delete nextMap[t]
+    onChange(times.filter(x => x !== t), nextMap)
+  }
+
+  const setFolderForTime = (t, folder) => {
+    const nextMap = { ...timeQuerySets }
+    if (folder === DEFAULT_FOLDER_VALUE) delete nextMap[t]
+    else nextMap[t] = folder
+    onChange(times, nextMap)
+  }
+
+  const FolderSelect = ({ value, onValueChange, className }) => (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className={cn('h-8 text-xs', className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={DEFAULT_FOLDER_VALUE}>Default (active saved list)</SelectItem>
+        {querySetNames.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  )
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+      <div className="space-y-1.5">
         {times.map(t => (
-          <div key={t} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-3 py-1.5 group">
-            <span className="text-sm font-mono text-foreground">{t}</span>
+          <div key={t} className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-1.5 group">
+            <span className="text-sm font-mono text-foreground w-14 flex-shrink-0">{t}</span>
+            <FolderSelect
+              value={timeQuerySets[t] || DEFAULT_FOLDER_VALUE}
+              onValueChange={(v) => setFolderForTime(t, v)}
+              className="flex-1"
+            />
             <button
               onClick={() => remove(t)}
-              className="w-4 h-4 rounded flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+              className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
             >
-              <X className="w-3 h-3" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         ))}
@@ -768,9 +838,10 @@ function TimeList({ times, onChange }) {
           type="time"
           value={newTime}
           onChange={e => setNewTime(e.target.value)}
-          className="w-auto"
+          className="w-auto flex-shrink-0"
         />
-        <Button variant="outline" onClick={add}>Add Time</Button>
+        <FolderSelect value={newFolder} onValueChange={setNewFolder} className="w-56 flex-shrink-0" />
+        <Button variant="outline" onClick={add} disabled={!newTime || times.includes(newTime)}>Add Time</Button>
       </div>
     </div>
   )
@@ -779,6 +850,9 @@ function TimeList({ times, onChange }) {
 function AutomationTab({ cfg, onChange }) {
   const a = cfg.automation || {}
   const set = (key, val) => onChange({ ...cfg, automation: { ...a, [key]: val } })
+  const setTimesAndFolders = (times, timeQuerySets) =>
+    onChange({ ...cfg, automation: { ...a, times, time_query_sets: timeQuerySets } })
+  const querySetNames = Object.keys(cfg.scraping?.query_sets || {})
   const [nextRuns, setNextRuns] = useState([])
 
   useEffect(() => {
@@ -843,8 +917,16 @@ function AutomationTab({ cfg, onChange }) {
 
           <div className="space-y-4">
             <SectionLabel>Run Times</SectionLabel>
-            <Field label="Schedule Times" hint="The pipeline will run at each of these times on the selected days. All times are in the selected timezone.">
-              <TimeList times={a.times || []} onChange={v => set('times', v)} />
+            <Field
+              label="Schedule Times"
+              hint="The pipeline runs at each of these times on the selected days, in the selected timezone. Optionally pin a specific saved search-query folder to a time — leave it on Default to use whichever folder is currently active."
+            >
+              <TimeList
+                times={a.times || []}
+                timeQuerySets={a.time_query_sets || {}}
+                querySetNames={querySetNames}
+                onChange={setTimesAndFolders}
+              />
             </Field>
           </div>
 

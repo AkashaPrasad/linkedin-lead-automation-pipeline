@@ -114,9 +114,17 @@ def _post_to_row(post: dict) -> list:
 
 
 def _batch_append_sync(ws, rows: list[list]):
+    from gspread.utils import InsertDataOption
     for i in range(0, len(rows), 50):
         chunk = rows[i:i + 50]
-        ws.append_rows(chunk, value_input_option="RAW")
+        # insert_data_option is NOT optional here — the Sheets API's default
+        # for values.append is OVERWRITE (it heuristically detects "the
+        # table" and overwrites whatever comes after it), not "add new
+        # rows". Without INSERT_ROWS explicit, an ambiguous table-boundary
+        # detection can silently overwrite an existing row instead of
+        # appending after it — this caused real, confirmed data loss in the
+        # separate Manual Leads sheet before it was caught and fixed here too.
+        ws.append_rows(chunk, value_input_option="RAW", insert_data_option=InsertDataOption.insert_rows)
         if i + 50 < len(rows):
             import time
             time.sleep(1)

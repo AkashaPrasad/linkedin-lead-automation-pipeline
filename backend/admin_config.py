@@ -29,7 +29,11 @@ DEFAULT_CONFIG = {
         "posted_limit": "month",
         "sort_by": "date",
         "author_industry_ids": [],
-        "author_geo_ids": [],
+        # 102713980 = LinkedIn's geo URN for India. Location is filtered here,
+        # at scrape time, ONLY — the AI filter stage no longer reasons about
+        # country/location at all (see stages/gpt_filter.py), so this is the
+        # single place "India" is enforced.
+        "author_geo_ids": ["102713980"],
         "min_post_length": 50,
         # When True, Stage 1 uses the cookie-authenticated Apify actor
         # (APIFY_COOKIE_ACTOR_ID) with the LinkedIn session cookie from
@@ -57,6 +61,13 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "days": ["monday", "wednesday", "friday"],
         "times": ["09:00"],
+        # Optional per-time override: {"09:00": "search-2"} runs that specific
+        # saved query folder for the 09:00 slot instead of the currently
+        # active/default one. A time with no entry here (or one whose folder
+        # name no longer exists in scraping.query_sets) falls back to the
+        # default active list — see pipeline.run_pipeline_async's handling
+        # of query_set_override.
+        "time_query_sets": {},
         "timezone": "Asia/Kolkata",
     },
 }
