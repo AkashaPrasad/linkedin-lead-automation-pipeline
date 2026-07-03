@@ -147,15 +147,85 @@ async def _pipeline_run_core(wrapper_fn):
         run_history.append_run(summary, full_log)
 
 
-async def _pipeline_wrapper():
-    await _pipeline_run_core(run_pipeline_async)
-
-
-# A hung/runaway automated run must never block forever — APScheduler shares
-# the same event loop as the rest of the app, so an unbounded scheduled job
-# is a real risk to overall uptime, not just to that one run. 3 hours is
-# generous for the heaviest realistic workload but still a hard ceiling.
+# A hung/runaway run must never block forever — FastAPI's background tasks
+# and APScheduler's jobs share the SAME event loop as the rest of the app,
+# so an unbounded run of ANY kind (manual, scheduled, resume, or promote) is
+# a real risk to overall uptime, not just to that one run. This used to only
+# wrap the scheduled path, meaning a manually-triggered run had zero timeout
+# protection despite posing the identical risk — now applied uniformly via
+# _run_with_timeout below. 3 hours is generous for the heaviest realistic
+# workload but still a hard ceiling.
 AUTOMATION_TIMEOUT_SECONDS = 3 * 60 * 60
+
+
+async def _run_with_timeout(wrapper_fn, run_label: str) -> None:
+    """Runs _pipeline_run_core(wrapper_fn) under the same hang-protection
+    regardless of how the run was triggered (manual button, resume, promote,
+    or scheduled) — see AUTOMATION_TIMEOUT_SECONDS above for why this must
+    never be skipped for any trigger source."""
+    global _is_running, _current_task
+    try:
+        _current_task = asyncio.create_task(_pipeline_run_core(wrapper_fn))
+        await asyncio.wait_for(_current_task, timeout=AUTOMATION_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        log.error(f"{run_label} exceeded {AUTOMATION_TIMEOUT_SECONDS}s — cancelling")
+        if _current_task:
+            _current_task.cancel()
+        await send_alert(
+            f"🛑 {run_label} timed out after {AUTOMATION_TIMEOUT_SECONDS // 3600}h and was cancelled automatically"
+        )
+    except Exception:
+        # _pipeline_run_core already logs, alerts, and records this failure
+        # to run_history in its own finally block — re-raising here would
+        # just produce a second, redundant "crashed" alert for the same
+        # failure. Swallow it; the caller only needed the timeout guard.
+        pass
+    finally:
+        # Belt-and-suspenders — _pipeline_run_core already resets _is_running
+        # in its own finally, but a hard guarantee here means a stuck flag
+        # (and the "already running forever" lockup that causes) is no
+        # longer possible no matter what goes wrong above.
+        _is_running = False
+        _current_task = None
+
+
+def _preflight_error(cfg: dict | None = None, check_cookie: bool = True) -> str | None:
+    """Shared pre-flight validation for every entry point that starts a run
+    (manual, scheduled, resume, promote) — so "automated runs the same as
+    manual" is actually true of the checks guarding it, not just the pipeline
+    logic itself. Returns None if everything looks fine, else a human-
+    readable reason. Does not raise — callers decide how to surface it
+    (HTTPException for API routes, log+alert for the scheduler).
+
+    check_cookie=False for resume: resuming from a checkpoint never re-runs
+    Stage 1 (Apify), so an unrelated cookie problem shouldn't block it —
+    that would be a NEW restriction resume never had before."""
+    missing = validate_config()
+    if missing:
+        return f"Missing env vars: {', '.join(missing)}"
+    if not service_account_path().exists():
+        return "service_account.json not found in backend/ folder"
+
+    if not check_cookie:
+        return None
+
+    cfg = cfg if cfg is not None else admin_cfg.load()
+    if cfg.get("scraping", {}).get("use_cookie_actor"):
+        from config import get_linkedin_cookie
+        cookie_ok = False
+        cookie_raw = get_linkedin_cookie()
+        if cookie_raw:
+            try:
+                parsed = json.loads(cookie_raw)
+                cookie_ok = isinstance(parsed, list) and len(parsed) > 0
+            except Exception:
+                cookie_ok = False
+        if not cookie_ok:
+            return (
+                "Cookie scraping is on but the LinkedIn cookie is missing or invalid. "
+                "Update it in Admin Panel, or turn off cookie mode."
+            )
+    return None
 
 
 def _log_scheduled_abort(status: str, message: str) -> None:
@@ -179,7 +249,7 @@ def _log_scheduled_abort(status: str, message: str) -> None:
 
 
 async def _scheduled_pipeline_run(query_set: str | None = None):
-    global _is_running, _current_task
+    global _is_running
 
     if _is_running:
         log.warning("Scheduled run skipped — pipeline already running")
@@ -187,43 +257,17 @@ async def _scheduled_pipeline_run(query_set: str | None = None):
         _log_scheduled_abort("skipped", "Scheduled run skipped — a pipeline run was already in progress")
         return
 
-    # Manual runs validate config before starting; the scheduled path
-    # previously skipped this and could fail deep into a multi-stage run
-    # with no one watching. Fail fast instead.
-    missing = validate_config()
-    if missing:
-        msg = f"Scheduled run aborted — missing env vars: {', '.join(missing)}"
-        log.error(msg)
-        await send_alert(f"❌ {msg}")
-        _log_scheduled_abort("failed", msg)
-        return
-    if not service_account_path().exists():
-        msg = "Scheduled run aborted — service_account.json not found"
-        log.error(msg)
-        await send_alert(f"❌ {msg}")
-        _log_scheduled_abort("failed", msg)
-        return
-
+    # Exactly the same _preflight_error() used by /api/pipeline/run — a
+    # scheduled run and a manually-triggered run are now guarded by
+    # identical checks, not a partially-duplicated copy that can drift.
     cfg = admin_cfg.load()
-    if cfg.get("scraping", {}).get("use_cookie_actor"):
-        from config import get_linkedin_cookie
-        cookie_ok = False
-        cookie_raw = get_linkedin_cookie()
-        if cookie_raw:
-            try:
-                parsed = json.loads(cookie_raw)
-                cookie_ok = isinstance(parsed, list) and len(parsed) > 0
-            except Exception:
-                cookie_ok = False
-        if not cookie_ok:
-            msg = (
-                "Scheduled run aborted — cookie scraping is on but the LinkedIn cookie is "
-                "missing or invalid. Update it in Admin Panel, or turn off cookie mode."
-            )
-            log.error(msg)
-            await send_alert(f"❌ {msg}")
-            _log_scheduled_abort("failed", msg)
-            return
+    err = _preflight_error(cfg)
+    if err:
+        msg = f"Scheduled run aborted — {err}"
+        log.error(msg)
+        await send_alert(f"❌ {msg}")
+        _log_scheduled_abort("failed", msg)
+        return
 
     _is_running = True
     _event_history.clear()
@@ -231,28 +275,10 @@ async def _scheduled_pipeline_run(query_set: str | None = None):
     log.info(f"Scheduled pipeline run starting{folder_note}")
     await send_alert(f"⏰ Scheduled pipeline run starting{folder_note}")
 
-    try:
-        _current_task = asyncio.create_task(
-            _pipeline_run_core(lambda emit: run_pipeline_async(emit, query_set_override=query_set))
-        )
-        await asyncio.wait_for(_current_task, timeout=AUTOMATION_TIMEOUT_SECONDS)
-    except asyncio.TimeoutError:
-        log.error(f"Scheduled run exceeded {AUTOMATION_TIMEOUT_SECONDS}s — cancelling")
-        if _current_task:
-            _current_task.cancel()
-        await send_alert(
-            f"🛑 Scheduled run timed out after {AUTOMATION_TIMEOUT_SECONDS // 3600}h and was cancelled automatically"
-        )
-    except Exception as e:
-        log.error(f"Scheduled run crashed: {e}", exc_info=True)
-        await send_alert(f"❌ Scheduled run crashed: {str(e)[:200]}")
-    finally:
-        # Belt-and-suspenders — _pipeline_run_core already resets _is_running
-        # in its own finally, but a hard guarantee here means a stuck flag
-        # (and the "already running forever" lockup that causes) is no
-        # longer possible no matter what goes wrong above.
-        _is_running = False
-        _current_task = None
+    await _run_with_timeout(
+        lambda emit: run_pipeline_async(emit, query_set_override=query_set),
+        "Scheduled run",
+    )
 
 
 # ── Startup / shutdown ────────────────────────────────────────────────────────
@@ -328,17 +354,15 @@ async def pipeline_stream(request: Request):
 # ── Pipeline run endpoint ─────────────────────────────────────────────────────
 @app.post("/api/pipeline/run")
 async def run_pipeline():
-    global _is_running, _current_task
+    global _is_running
     if _is_running:
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
-    missing = validate_config()
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Missing env vars: {', '.join(missing)}")
-    if not service_account_path().exists():
-        raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
+    err = _preflight_error()
+    if err:
+        raise HTTPException(status_code=400, detail=err)
     _is_running = True
     _event_history.clear()
-    _current_task = asyncio.create_task(_pipeline_wrapper())
+    asyncio.create_task(_run_with_timeout(run_pipeline_async, "Pipeline run"))
     return {"status": "started"}
 
 
@@ -372,23 +396,20 @@ async def get_checkpoint():
 
 @app.post("/api/pipeline/resume")
 async def resume_pipeline():
-    global _is_running, _current_task
+    global _is_running
     if _is_running:
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
     if not cp.exists():
         raise HTTPException(status_code=404, detail="No checkpoint found. Run the pipeline first.")
-    missing = validate_config()
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Missing env vars: {', '.join(missing)}")
-    if not service_account_path().exists():
-        raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
+    # check_cookie=False: resume never re-runs Stage 1 (Apify), so a cookie
+    # problem is irrelevant to it — matches this endpoint's pre-existing
+    # (narrower) checks rather than adding a new restriction.
+    err = _preflight_error(check_cookie=False)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
     _is_running = True
     _event_history.clear()
-
-    async def _resume_wrapper():
-        await _pipeline_run_core(resume_pipeline_async)
-
-    _current_task = asyncio.create_task(_resume_wrapper())
+    asyncio.create_task(_run_with_timeout(resume_pipeline_async, "Pipeline resume"))
     return {"status": "resuming"}
 
 
@@ -427,26 +448,26 @@ async def promote_preview(tab: str):
 
 @app.post("/api/pipeline/promote")
 async def promote_dry_run(request: Request):
-    global _is_running, _current_task
+    global _is_running
     if _is_running:
         raise HTTPException(status_code=409, detail="Pipeline already in progress")
     body = await request.json()
     tab_name = (body.get("tab_name") or "").strip()
     if not tab_name:
         raise HTTPException(status_code=400, detail="tab_name required")
-    missing = validate_config()
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Missing env vars: {', '.join(missing)}")
-    if not service_account_path().exists():
-        raise HTTPException(status_code=400, detail="service_account.json not found in backend/ folder")
+    # check_cookie=False: promoting reads already-scraped rows out of an
+    # existing dry-run tab, never re-runs Stage 1 (Apify) — same reasoning
+    # as resume.
+    err = _preflight_error(check_cookie=False)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
     _is_running = True
     _event_history.clear()
 
-    async def _promote_wrapper():
-        from promote import promote_dry_run_async
-        await _pipeline_run_core(lambda emit: promote_dry_run_async(emit, tab_name))
-
-    _current_task = asyncio.create_task(_promote_wrapper())
+    from promote import promote_dry_run_async
+    asyncio.create_task(
+        _run_with_timeout(lambda emit: promote_dry_run_async(emit, tab_name), "Promote dry run")
+    )
     return {"status": "started", "tab_name": tab_name}
 
 
