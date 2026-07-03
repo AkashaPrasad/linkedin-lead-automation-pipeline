@@ -129,7 +129,11 @@ def _build_run_input(cfg: dict, query: str) -> dict:
         posted_limit = "month"
     run_input = {
         "searchQueries": [query],
-        "maxPostsPerQuery": scraping.get("max_posts_per_query", 50),
+        # The actor's actual input field is "maxPosts", not "maxPostsPerQuery"
+        # (confirmed against its live input schema) — the old field name was
+        # silently ignored by the actor, which defaulted to scraping up to
+        # 100 posts per query regardless of what was configured here.
+        "maxPosts": scraping.get("max_posts_per_query", 50),
         "sortBy": scraping.get("sort_by", "date"),
     }
     if posted_limit == "48h":

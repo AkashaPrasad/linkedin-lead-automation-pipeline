@@ -102,7 +102,11 @@ def _post_to_row(post: dict) -> list:
         post.get("_category") or "Generic",
         post.get("_lead_status") or "REAL",
         "",  # Template sent
-        "PENDING",
+        # Sent Status starts blank for EVERY row — a skipped (non-REAL) lead
+        # stays blank permanently (send stages never touch it); a REAL lead
+        # gets this overwritten at finalize with exactly "SENT" or
+        # "NO_EMAIL" once Stages 6-8 resolve it. No "PENDING" placeholder.
+        "",
         "",  # Sent timestamp
         "",  # Error
         post.get("_repeat_lead") or "No",
@@ -131,7 +135,11 @@ def _update_columns_sync(ws, posts: list[dict], start_row: int):
                 post.get("_category") or "Generic",
                 post.get("_lead_status") or "REAL",
                 post.get("_template_sent") or "",
-                post.get("_sent_status") or "PENDING",
+                # By finalize time every REAL lead must be resolved to
+                # exactly "SENT" or "NO_EMAIL" — if _sent_status is somehow
+                # still unset here, "NO_EMAIL" is the correct default (no
+                # successful send happened), never "PENDING".
+                post.get("_sent_status") or "NO_EMAIL",
                 post.get("_sent_timestamp") or "",
                 post.get("_error") or "",
             ]

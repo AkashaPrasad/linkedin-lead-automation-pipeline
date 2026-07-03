@@ -64,11 +64,9 @@ Extract FOUR things from the post below:
 
 3. CATEGORY: Pick exactly ONE of: "Growth", "Production", "Influencer Marketing", "Branding", "Creative", "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel", "Creative - Kids", "Creative - Beauty", "Generic" using the definitions and tiebreakers above.
 
-4. CONTACT METHOD: How does the post tell people to reach out? Pick exactly ONE, in this priority order (check Email first, then Phone, then DM — use the highest-priority one that's actually present):
+4. CONTACT METHOD: How does the post tell people to reach out? Pick exactly ONE of only two values:
    - "Email" — an email address is given anywhere in the post (e.g. "email me at x@y.com", "send your portfolio to x@y.com").
-   - "Phone Number" — no email given, but a phone/WhatsApp number is given (e.g. "call/WhatsApp 9876543210", "contact us at +91-...").
-   - "DM on LinkedIn" — no email or phone given, but the post says to message/DM/comment to be contacted (e.g. "DM me", "comment below", "ping me", "message me", "drop a comment and I'll reach out").
-   - "Not specified" — none of the above are present anywhere in the post.
+   - "Phone/LinkedIn/Not Specified" — everything else: a phone/WhatsApp number is given instead, OR the post says to message/DM/comment ("DM me", "comment below", "ping me"), OR no contact method is mentioned at all. All three of these cases share this one combined value — do not distinguish between them.
 
 POST CONTENT:
 {post_content}
@@ -84,7 +82,8 @@ VALID_CATEGORIES = {
     "Creative - FMCG", "Creative - Real Estate", "Creative - Apparel",
     "Creative - Kids", "Creative - Beauty", "Generic",
 }
-VALID_CONTACT_METHODS = {"Email", "Phone Number", "DM on LinkedIn", "Not specified"}
+VALID_CONTACT_METHODS = {"Email", "Phone/LinkedIn/Not Specified"}
+DEFAULT_CONTACT_METHOD = "Phone/LinkedIn/Not Specified"
 
 
 def _truncate(text: str, max_chars: int = 3000) -> str:
@@ -147,7 +146,7 @@ def _classify_one(post: dict) -> dict:
 
     if not providers:
         log.error("No AI providers configured for classify stage")
-        return {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": "Not specified"}
+        return {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": DEFAULT_CONTACT_METHOD}
 
     ordered_names = provider_order([provider_name for provider_name, _ in providers])
     provider_map = {provider_name: func for provider_name, func in providers}
@@ -170,7 +169,7 @@ def _classify_one(post: dict) -> dict:
     log.error(
         f"All configured AI providers failed in classify ({', '.join(failed)}): {last_err}"
     )
-    return {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": "Not specified"}
+    return {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": DEFAULT_CONTACT_METHOD}
 
 
 async def _classify_one_async(post: dict) -> tuple[dict, dict]:
@@ -189,13 +188,18 @@ async def _classify_one_async(post: dict) -> tuple[dict, dict]:
             result["company_name"] = None
         # If we found a real email, contact method should always say "Email" regardless
         # of what the model picked — the email itself is the most reliable signal.
+        # Conversely, "Email" is NEVER valid without an actual email_in_post value —
+        # observed in testing that the model sometimes returns contact_method="Email"
+        # even when email_in_post is null (an internal inconsistency in its own raw
+        # output, not something a value-membership check alone catches, since "Email"
+        # is itself a recognized value). Force the fallback in that case.
         if result.get("email_in_post"):
             result["contact_method"] = "Email"
-        elif result.get("contact_method") not in VALID_CONTACT_METHODS:
-            result["contact_method"] = "Not specified"
+        elif result.get("contact_method") not in VALID_CONTACT_METHODS or result.get("contact_method") == "Email":
+            result["contact_method"] = DEFAULT_CONTACT_METHOD
     except Exception as e:
         log.warning(f"Classify parse error: {e}")
-        result = {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": "Not specified"}
+        result = {"email_in_post": None, "company_name": None, "category": "Generic", "contact_method": DEFAULT_CONTACT_METHOD}
     return post, result
 
 
@@ -216,7 +220,7 @@ async def run_gpt_classify(real_posts: list[dict], emit) -> list[dict]:
             post["_email_in_post"] = classification.get("email_in_post")
             post["_company_name"] = classification.get("company_name")
             post["_category"] = classification.get("category", "Generic")
-            post["_contact_method"] = classification.get("contact_method", "Not specified")
+            post["_contact_method"] = classification.get("contact_method", DEFAULT_CONTACT_METHOD)
             enriched.append(post)
 
         processed = min(i + batch_size, total)

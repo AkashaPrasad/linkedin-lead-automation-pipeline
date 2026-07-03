@@ -1,21 +1,16 @@
 {
   "scraping": {
     "search_queries": [
-      "\"shortlisting\" agency India",
-      "\"evaluating agencies\" India",
-      "\"hiring an agency\" India",
-      "\"onboarding an agency\" India",
-      "\"DM me\" marketing agency India",
-      "\"looking for recommendations\" agency India",
-      "\"we are looking for\" marketing India",
-      "\"can anyone recommend\" agency India",
-      "\"shortlisting\" marketing agency",
-      "\"evaluating\" performance marketing agency",
-      "\"anyone worked with\" marketing agency India",
-      "\"switching agencies\" India",
-      "\"need a marketing agency\" India",
-      "\"evaluating\" branding agency India",
-      "\"looking for\" social media agency India"
+      "\"looking for a PR agency\"",
+      "\"looking for an influencer marketing agency\"",
+      "\"looking for a branding agency\"",
+      "\"looking for a creative agency\"",
+      "\"we are looking for a marketing agency\"",
+      "\"looking for a growth partner\"",
+      "\"looking for a digital marketing partner\"",
+      "\"seeking a marketing agency\"",
+      "\"looking for a performance marketing partner\"",
+      "\"looking for a marketing partner\""
     ],
     "query_sets": {
       "search-1": [
@@ -197,9 +192,21 @@
         "\"influencer marketing\" agency India",
         "\"D2C growth\" agency India",
         "\"performance agency\" India"
+      ],
+      "test-6": [
+        "\"looking for a PR agency\"",
+        "\"looking for an influencer marketing agency\"",
+        "\"looking for a branding agency\"",
+        "\"looking for a creative agency\"",
+        "\"we are looking for a marketing agency\"",
+        "\"looking for a growth partner\"",
+        "\"looking for a digital marketing partner\"",
+        "\"seeking a marketing agency\"",
+        "\"looking for a performance marketing partner\"",
+        "\"looking for a marketing partner\""
       ]
     },
-    "active_query_set": "test-5",
+    "active_query_set": "test-6",
     "max_posts_per_query": 150,
     "total_post_cap": 1000,
     "posted_limit": "week",

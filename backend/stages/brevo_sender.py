@@ -134,25 +134,34 @@ async def run_brevo_sender(
 
     sendable = [p for p in posts if p.get("_final_email") and p.get("_lead_status", "REAL") == "REAL"]
 
+    # For a REAL (non-dry) lead, the Sent Status column must only ever show
+    # exactly "SENT" or "NO_EMAIL" — never CAPPED/FAILED/SKIPPED_* internal
+    # reasons. Those specific reasons are still tracked (via failed_count/
+    # capped, and written into the Error column below) for real reporting —
+    # they just don't leak into the simplified Sent Status value itself.
     for post in sendable:
         if auth_failed:
-            post["_sent_status"] = "SKIPPED_AUTH_FAILURE"
+            post["_sent_status"] = "NO_EMAIL"
+            post["_error"] = "Not sent — Brevo auth failure earlier in this run"
             continue
 
         if sent_count >= effective_cap:
-            post["_sent_status"] = "CAPPED"
+            post["_sent_status"] = "NO_EMAIL"
+            post["_error"] = "Not sent — daily send cap reached"
             capped = True
             continue
 
         email = post["_final_email"]
         if not EMAIL_RE.match(email):
-            post["_sent_status"] = "SKIPPED_INVALID_EMAIL"
+            post["_sent_status"] = "NO_EMAIL"
+            post["_error"] = f"Invalid email format: {email}"
             log.warning(f"Invalid email format skipped: {email}")
             continue
 
         domain = email.split("@")[-1].lower()
         if any(domain == excl or domain.endswith("." + excl) for excl in effective_excluded):
-            post["_sent_status"] = "SKIPPED_EXCLUDED_DOMAIN"
+            post["_sent_status"] = "NO_EMAIL"
+            post["_error"] = f"Excluded domain: {domain}"
             log.info(f"Skipped excluded domain: {domain}")
             continue
 
@@ -202,7 +211,7 @@ async def run_brevo_sender(
             except PermissionError as e:
                 # IP restriction or bad API key — stop immediately, no point retrying
                 err_msg = str(e)
-                post["_sent_status"] = "FAILED"
+                post["_sent_status"] = "NO_EMAIL"
                 post["_error"] = err_msg[:200]
                 failed_count += 1
                 auth_failed = True
@@ -210,7 +219,8 @@ async def run_brevo_sender(
                 await emit({"event": "log", "level": "ERROR", "message": f"❌ Brevo auth error: {err_msg}"})
                 break
             except OverflowError:
-                post["_sent_status"] = "CAPPED"
+                post["_sent_status"] = "NO_EMAIL"
+                post["_error"] = "Not sent — Brevo daily send limit reached"
                 capped = True
                 await emit({"event": "progress", "stage": 8, "message": "Brevo daily send limit reached — stopping"})
                 log.warning("Brevo daily limit hit")
@@ -220,12 +230,12 @@ async def run_brevo_sender(
                     await emit({"event": "progress", "stage": 8, "message": "Brevo rate limit — waiting 60s..."})
                     await asyncio.sleep(60)
                 else:
-                    post["_sent_status"] = "FAILED"
+                    post["_sent_status"] = "NO_EMAIL"
                     post["_error"] = "Brevo rate limit on retry"
                     failed_count += 1
                     break
             except Exception as e:
-                post["_sent_status"] = "FAILED"
+                post["_sent_status"] = "NO_EMAIL"
                 post["_error"] = str(e)[:200]
                 failed_count += 1
                 log.error(f"Email send failed for {email}: {e}")

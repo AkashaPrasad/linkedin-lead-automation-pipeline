@@ -682,7 +682,7 @@ function SendingTab({ cfg, onChange }) {
         <p className="text-xs text-purple-light font-medium mb-1">Brevo Free Plan Limits</p>
         <p className="text-xs text-text-secondary leading-relaxed">
           Free plan: 300 emails/day, 9,000/month. Upgrade to Starter ($25/mo) for 20k/month.
-          The pipeline will mark remaining emails as CAPPED if the daily limit is hit.
+          Remaining leads are marked as NO_EMAIL (with a note in the Error column) if the daily limit is hit.
         </p>
       </div>
     </div>

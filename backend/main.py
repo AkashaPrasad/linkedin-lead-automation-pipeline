@@ -158,12 +158,33 @@ async def _pipeline_wrapper():
 AUTOMATION_TIMEOUT_SECONDS = 3 * 60 * 60
 
 
+def _log_scheduled_abort(status: str, message: str) -> None:
+    """Every scheduled-run outcome — including pre-flight aborts — must leave
+    a trace in run_history. Previously, pre-flight aborts (missing env vars,
+    missing service account, invalid cookie, already-running) only sent a
+    Telegram alert and returned, without ever touching run_history (which is
+    only written inside _pipeline_run_core's finally block). If that alert
+    was missed, the automated run looked like it silently produced nothing,
+    with zero trace anywhere in the app itself. Logging every outcome here
+    closes that gap — check History after any automated run that seems to
+    have found nothing, not just Telegram."""
+    run_history.append_run({
+        "status": status,
+        "scraped": 0, "real": 0, "enriched": 0, "with_email": 0,
+        "sent": 0, "failed": 0, "no_email": 0, "duration_min": 0,
+        "dry_run": False,
+        "error_message": message,
+        "date": dt_date.today().isoformat(),
+    })
+
+
 async def _scheduled_pipeline_run():
     global _is_running, _current_task
 
     if _is_running:
         log.warning("Scheduled run skipped — pipeline already running")
         await send_alert("⏭ Scheduled run skipped — a pipeline run was already in progress")
+        _log_scheduled_abort("skipped", "Scheduled run skipped — a pipeline run was already in progress")
         return
 
     # Manual runs validate config before starting; the scheduled path
@@ -171,12 +192,16 @@ async def _scheduled_pipeline_run():
     # with no one watching. Fail fast instead.
     missing = validate_config()
     if missing:
-        log.error(f"Scheduled run aborted — missing env vars: {', '.join(missing)}")
-        await send_alert(f"❌ Scheduled run aborted — missing env vars: {', '.join(missing)}")
+        msg = f"Scheduled run aborted — missing env vars: {', '.join(missing)}"
+        log.error(msg)
+        await send_alert(f"❌ {msg}")
+        _log_scheduled_abort("failed", msg)
         return
     if not service_account_path().exists():
-        log.error("Scheduled run aborted — service_account.json not found")
-        await send_alert("❌ Scheduled run aborted — service_account.json not found in backend/ folder")
+        msg = "Scheduled run aborted — service_account.json not found"
+        log.error(msg)
+        await send_alert(f"❌ {msg}")
+        _log_scheduled_abort("failed", msg)
         return
 
     cfg = admin_cfg.load()
@@ -191,11 +216,13 @@ async def _scheduled_pipeline_run():
             except Exception:
                 cookie_ok = False
         if not cookie_ok:
-            log.error("Scheduled run aborted — cookie scraping enabled but LINKEDIN_COOKIE missing/invalid")
-            await send_alert(
-                "❌ Scheduled run aborted — cookie scraping is on but the LinkedIn cookie is "
+            msg = (
+                "Scheduled run aborted — cookie scraping is on but the LinkedIn cookie is "
                 "missing or invalid. Update it in Admin Panel, or turn off cookie mode."
             )
+            log.error(msg)
+            await send_alert(f"❌ {msg}")
+            _log_scheduled_abort("failed", msg)
             return
 
     _is_running = True
