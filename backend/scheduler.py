@@ -52,6 +52,7 @@ def update(automation_cfg: dict):
     days = automation_cfg.get("days", [])
     times = automation_cfg.get("times", ["09:00"])
     time_query_sets = automation_cfg.get("time_query_sets", {})
+    time_cookie_modes = automation_cfg.get("time_cookie_modes", {})
     tz = automation_cfg.get("timezone", "Asia/Kolkata")
     day_str = ",".join(_DAY_MAP.get(d.lower(), d) for d in days) if days else "*"
 
@@ -60,18 +61,24 @@ def update(automation_cfg: dict):
             h, m = t.split(":")
             # None (not just "") means "no override" — run_pipeline_async
             # treats both "not passed" and None identically, falling back
-            # to whatever query list is currently active/default.
+            # to whatever query list / cookie setting is currently the default.
             query_set = time_query_sets.get(t) or None
+            cookie_mode = time_cookie_modes.get(t) or None
             _scheduler.add_job(
                 _run_fn,
                 CronTrigger(day_of_week=day_str, hour=int(h), minute=int(m), timezone=tz),
-                args=[query_set],
+                args=[query_set, cookie_mode],
                 misfire_grace_time=300,
                 coalesce=True,
                 id=f"pipeline_{t}_{day_str}",
                 replace_existing=True,
             )
-            label = f" using query folder '{query_set}'" if query_set else ""
+            labels = []
+            if query_set:
+                labels.append(f"query folder '{query_set}'")
+            if cookie_mode:
+                labels.append(f"'{cookie_mode}' scraping")
+            label = f" using {', '.join(labels)}" if labels else ""
             log.info(f"Scheduled: {day_str} at {t} ({tz}){label}")
         except Exception as e:
             log.error(f"Failed to schedule {t}: {e}")

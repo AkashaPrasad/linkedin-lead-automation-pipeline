@@ -774,30 +774,50 @@ const DEFAULT_FOLDER_VALUE = '__default__'
 // Each scheduled time can optionally pin a specific saved search-query
 // folder — if none is chosen, that time slot runs whatever folder is
 // currently active/default (today's behavior, unchanged).
-function TimeList({ times, timeQuerySets, querySetNames, onChange }) {
+const DEFAULT_COOKIE_VALUE = '__default__'
+const COOKIE_MODE_OPTIONS = [
+  { value: DEFAULT_COOKIE_VALUE, label: 'Default (current toggle)' },
+  { value: 'cookie', label: 'Cookie mode' },
+  { value: 'no_cookie', label: 'No-cookie mode' },
+]
+
+function TimeList({ times, timeQuerySets, querySetNames, timeCookieModes, onChange }) {
   const [newTime, setNewTime] = useState('09:00')
   const [newFolder, setNewFolder] = useState(DEFAULT_FOLDER_VALUE)
+  const [newCookieMode, setNewCookieMode] = useState(DEFAULT_COOKIE_VALUE)
 
   const add = () => {
     if (!newTime || times.includes(newTime)) return
     const nextTimes = [...times, newTime].sort()
-    const nextMap = { ...timeQuerySets }
-    if (newFolder !== DEFAULT_FOLDER_VALUE) nextMap[newTime] = newFolder
-    onChange(nextTimes, nextMap)
+    const nextFolders = { ...timeQuerySets }
+    const nextCookies = { ...timeCookieModes }
+    if (newFolder !== DEFAULT_FOLDER_VALUE) nextFolders[newTime] = newFolder
+    if (newCookieMode !== DEFAULT_COOKIE_VALUE) nextCookies[newTime] = newCookieMode
+    onChange(nextTimes, nextFolders, nextCookies)
     setNewFolder(DEFAULT_FOLDER_VALUE)
+    setNewCookieMode(DEFAULT_COOKIE_VALUE)
   }
 
   const remove = (t) => {
-    const nextMap = { ...timeQuerySets }
-    delete nextMap[t]
-    onChange(times.filter(x => x !== t), nextMap)
+    const nextFolders = { ...timeQuerySets }
+    const nextCookies = { ...timeCookieModes }
+    delete nextFolders[t]
+    delete nextCookies[t]
+    onChange(times.filter(x => x !== t), nextFolders, nextCookies)
   }
 
   const setFolderForTime = (t, folder) => {
-    const nextMap = { ...timeQuerySets }
-    if (folder === DEFAULT_FOLDER_VALUE) delete nextMap[t]
-    else nextMap[t] = folder
-    onChange(times, nextMap)
+    const nextFolders = { ...timeQuerySets }
+    if (folder === DEFAULT_FOLDER_VALUE) delete nextFolders[t]
+    else nextFolders[t] = folder
+    onChange(times, nextFolders, timeCookieModes)
+  }
+
+  const setCookieModeForTime = (t, mode) => {
+    const nextCookies = { ...timeCookieModes }
+    if (mode === DEFAULT_COOKIE_VALUE) delete nextCookies[t]
+    else nextCookies[t] = mode
+    onChange(times, timeQuerySets, nextCookies)
   }
 
   const FolderSelect = ({ value, onValueChange, className }) => (
@@ -812,6 +832,17 @@ function TimeList({ times, timeQuerySets, querySetNames, onChange }) {
     </Select>
   )
 
+  const CookieSelect = ({ value, onValueChange, className }) => (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className={cn('h-8 text-xs', className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {COOKIE_MODE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  )
+
   return (
     <div className="space-y-2">
       <div className="space-y-1.5">
@@ -821,6 +852,11 @@ function TimeList({ times, timeQuerySets, querySetNames, onChange }) {
             <FolderSelect
               value={timeQuerySets[t] || DEFAULT_FOLDER_VALUE}
               onValueChange={(v) => setFolderForTime(t, v)}
+              className="flex-1"
+            />
+            <CookieSelect
+              value={timeCookieModes[t] || DEFAULT_COOKIE_VALUE}
+              onValueChange={(v) => setCookieModeForTime(t, v)}
               className="flex-1"
             />
             <button
@@ -840,7 +876,8 @@ function TimeList({ times, timeQuerySets, querySetNames, onChange }) {
           onChange={e => setNewTime(e.target.value)}
           className="w-auto flex-shrink-0"
         />
-        <FolderSelect value={newFolder} onValueChange={setNewFolder} className="w-56 flex-shrink-0" />
+        <FolderSelect value={newFolder} onValueChange={setNewFolder} className="w-44 flex-shrink-0" />
+        <CookieSelect value={newCookieMode} onValueChange={setNewCookieMode} className="w-44 flex-shrink-0" />
         <Button variant="outline" onClick={add} disabled={!newTime || times.includes(newTime)}>Add Time</Button>
       </div>
     </div>
@@ -850,8 +887,8 @@ function TimeList({ times, timeQuerySets, querySetNames, onChange }) {
 function AutomationTab({ cfg, onChange }) {
   const a = cfg.automation || {}
   const set = (key, val) => onChange({ ...cfg, automation: { ...a, [key]: val } })
-  const setTimesAndFolders = (times, timeQuerySets) =>
-    onChange({ ...cfg, automation: { ...a, times, time_query_sets: timeQuerySets } })
+  const setTimeSchedule = (times, timeQuerySets, timeCookieModes) =>
+    onChange({ ...cfg, automation: { ...a, times, time_query_sets: timeQuerySets, time_cookie_modes: timeCookieModes } })
   const querySetNames = Object.keys(cfg.scraping?.query_sets || {})
   const [nextRuns, setNextRuns] = useState([])
 
@@ -919,13 +956,14 @@ function AutomationTab({ cfg, onChange }) {
             <SectionLabel>Run Times</SectionLabel>
             <Field
               label="Schedule Times"
-              hint="The pipeline runs at each of these times on the selected days, in the selected timezone. Optionally pin a specific saved search-query folder to a time — leave it on Default to use whichever folder is currently active."
+              hint="The pipeline runs at each of these times on the selected days, in the selected timezone. Optionally pin a specific saved search-query folder and/or cookie vs no-cookie scraping mode to a time — leave either on Default to use whatever's currently active/toggled."
             >
               <TimeList
                 times={a.times || []}
                 timeQuerySets={a.time_query_sets || {}}
                 querySetNames={querySetNames}
-                onChange={setTimesAndFolders}
+                timeCookieModes={a.time_cookie_modes || {}}
+                onChange={setTimeSchedule}
               />
             </Field>
           </div>

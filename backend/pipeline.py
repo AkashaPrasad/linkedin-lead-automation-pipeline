@@ -151,7 +151,11 @@ async def _run_stages_6_to_9(
     })
 
 
-async def run_pipeline_async(emit, query_set_override: str | None = None):
+async def run_pipeline_async(
+    emit,
+    query_set_override: str | None = None,
+    cookie_mode_override: str | None = None,
+):
     from admin_config import load as load_cfg
     cfg = load_cfg()
 
@@ -177,6 +181,17 @@ async def run_pipeline_async(emit, query_set_override: str | None = None):
                 f"⚠ Scheduled query folder '{query_set_override}' no longer exists — "
                 f"using the default query list instead"
             )
+
+    # Same idea for cookie vs no-cookie scraping, pinned per time slot. The
+    # caller (main.py's _scheduled_pipeline_run) already validated the
+    # LinkedIn cookie is actually usable BEFORE this run started if
+    # cookie_mode_override == "cookie" — this just applies the choice.
+    if cookie_mode_override in ("cookie", "no_cookie"):
+        use_cookie = cookie_mode_override == "cookie"
+        cfg = {**cfg, "scraping": {**cfg.get("scraping", {}), "use_cookie_actor": use_cookie}}
+        label = "cookie-authenticated" if use_cookie else "no-cookie"
+        log.info(f"Scheduled run: forcing '{label}' scraping mode for this time slot")
+        await send_alert(f"🍪 Using {label} scraping for this run")
 
     filtering = cfg.get("filtering", {})
     sending = cfg.get("sending", {})

@@ -248,7 +248,7 @@ def _log_scheduled_abort(status: str, message: str) -> None:
     })
 
 
-async def _scheduled_pipeline_run(query_set: str | None = None):
+async def _scheduled_pipeline_run(query_set: str | None = None, cookie_mode: str | None = None):
     global _is_running
 
     if _is_running:
@@ -260,8 +260,17 @@ async def _scheduled_pipeline_run(query_set: str | None = None):
     # Exactly the same _preflight_error() used by /api/pipeline/run — a
     # scheduled run and a manually-triggered run are now guarded by
     # identical checks, not a partially-duplicated copy that can drift.
+    # The cookie mode override (if any) is applied to a COPY of cfg before
+    # the pre-flight check, so the cookie-validity check reflects what this
+    # specific time slot will actually do, not just the global default.
     cfg = admin_cfg.load()
-    err = _preflight_error(cfg)
+    effective_cfg = cfg
+    if cookie_mode in ("cookie", "no_cookie"):
+        effective_cfg = {
+            **cfg,
+            "scraping": {**cfg.get("scraping", {}), "use_cookie_actor": cookie_mode == "cookie"},
+        }
+    err = _preflight_error(effective_cfg)
     if err:
         msg = f"Scheduled run aborted — {err}"
         log.error(msg)
@@ -271,12 +280,17 @@ async def _scheduled_pipeline_run(query_set: str | None = None):
 
     _is_running = True
     _event_history.clear()
-    folder_note = f" (query folder: '{query_set}')" if query_set else ""
-    log.info(f"Scheduled pipeline run starting{folder_note}")
-    await send_alert(f"⏰ Scheduled pipeline run starting{folder_note}")
+    notes = []
+    if query_set:
+        notes.append(f"query folder: '{query_set}'")
+    if cookie_mode:
+        notes.append(f"scraping: '{cookie_mode}'")
+    note = f" ({', '.join(notes)})" if notes else ""
+    log.info(f"Scheduled pipeline run starting{note}")
+    await send_alert(f"⏰ Scheduled pipeline run starting{note}")
 
     await _run_with_timeout(
-        lambda emit: run_pipeline_async(emit, query_set_override=query_set),
+        lambda emit: run_pipeline_async(emit, query_set_override=query_set, cookie_mode_override=cookie_mode),
         "Scheduled run",
     )
 

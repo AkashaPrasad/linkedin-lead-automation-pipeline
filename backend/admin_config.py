@@ -68,6 +68,11 @@ DEFAULT_CONFIG = {
         # default active list — see pipeline.run_pipeline_async's handling
         # of query_set_override.
         "time_query_sets": {},
+        # Same idea as time_query_sets, but for cookie vs no-cookie scraping:
+        # {"09:00": "cookie"} or {"14:00": "no_cookie"}. A time with no entry
+        # here falls back to whatever scraping.use_cookie_actor currently is
+        # — see pipeline.run_pipeline_async's handling of cookie_mode_override.
+        "time_cookie_modes": {},
         "timezone": "Asia/Kolkata",
     },
 }
