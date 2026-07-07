@@ -14,9 +14,8 @@ looks for STATUS_SENT (see _sync_sent_to_master_sync), so anything else,
 "Not sent" or "Skipped" alike, is simply left alone.
 """
 import asyncio
-from datetime import datetime
 from logger import get_logger
-from config import GOOGLE_SHEET_ID, MANUAL_LEADS_SHEET_ID, service_account_path
+from config import GOOGLE_SHEET_ID, MANUAL_LEADS_SHEET_ID, service_account_path, now_ist
 from stages.sheets_writer import HEADERS as MASTER_HEADERS
 
 log = get_logger("manual_leads")
@@ -238,7 +237,7 @@ def _sync_sent_to_master_sync(manual_ws, master_ws) -> int:
     if len(all_rows) <= 1:
         return 0
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     master_rows = []
     sheet_updates = []
 

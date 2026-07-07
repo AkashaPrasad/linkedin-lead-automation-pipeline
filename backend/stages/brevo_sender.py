@@ -2,9 +2,8 @@ import asyncio
 import re
 import json
 import requests
-from datetime import datetime
 from logger import get_logger
-from config import DAILY_EMAIL_CAP, persistent_data_path
+from config import DAILY_EMAIL_CAP, persistent_data_path, now_ist
 
 log = get_logger("brevo")
 
@@ -198,7 +197,7 @@ async def run_brevo_sender(
         if dry_run:
             post["_sent_status"] = "DRY_RUN"
             post["_template_sent"] = category
-            post["_sent_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            post["_sent_timestamp"] = now_ist().strftime("%Y-%m-%d %H:%M:%S")
             sent_count += 1
             log.info(f"[DRY RUN] Would send to {email} ({category})")
             await emit({"event": "lead", "name": name, "headline": headline,
@@ -211,7 +210,7 @@ async def run_brevo_sender(
                 await asyncio.to_thread(_send_one_sync_with_reply, email, name, subject, body, reply_to)
                 post["_sent_status"] = "SENT"
                 post["_template_sent"] = category
-                post["_sent_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                post["_sent_timestamp"] = now_ist().strftime("%Y-%m-%d %H:%M:%S")
                 sent_count += 1
                 log.info(f"Email sent to {email} ({category})")
                 await emit({"event": "lead", "name": name, "headline": headline,

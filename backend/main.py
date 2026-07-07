@@ -1,7 +1,6 @@
 import asyncio
 import json
 import sys
-from datetime import date as dt_date
 from pathlib import Path
 from collections import deque
 from contextlib import asynccontextmanager
@@ -12,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from config import validate_config, GOOGLE_SHEET_ID, service_account_path, persistent_data_path
+from config import validate_config, GOOGLE_SHEET_ID, service_account_path, persistent_data_path, now_ist
 from logger import get_logger
 from pipeline import run_pipeline_async, resume_pipeline_async
 from stages.alerts import send_alert
@@ -143,7 +142,7 @@ async def _pipeline_run_core(wrapper_fn):
                 "duration_min": 0, "dry_run": False,
             }
 
-        summary["date"] = dt_date.today().isoformat()
+        summary["date"] = now_ist().date().isoformat()
         run_history.append_run(summary, full_log)
 
 
@@ -244,7 +243,7 @@ def _log_scheduled_abort(status: str, message: str) -> None:
         "sent": 0, "failed": 0, "no_email": 0, "duration_min": 0,
         "dry_run": False,
         "error_message": message,
-        "date": dt_date.today().isoformat(),
+        "date": now_ist().date().isoformat(),
     })
 
 
@@ -505,7 +504,7 @@ async def get_brevo_stats(date: str = None):
     from config import BREVO_API_KEY
     if not BREVO_API_KEY:
         raise HTTPException(status_code=400, detail="Brevo API key not configured")
-    target_date = date or dt_date.today().isoformat()
+    target_date = date or now_ist().date().isoformat()
     headers = {"api-key": BREVO_API_KEY, "Content-Type": "application/json"}
     try:
         r = await asyncio.to_thread(

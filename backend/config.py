@@ -1,8 +1,27 @@
 import os
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
+
+# The business operates in India — every human-facing timestamp (History,
+# checkpoint, daily sheet tab names, Sent Timestamp columns) must reflect
+# IST regardless of what timezone the underlying host/container happens to
+# be set to. A bare datetime.now() returns the SERVER's system time, which
+# on Railway (python:3.10-slim, no TZ set) defaults to UTC — meaning every
+# timestamp recorded that way was silently off by +5:30, and because it was
+# also stored as a naive (timezone-less) string, the frontend's `new Date()`
+# had no way to correct for it either. Use this everywhere a human-facing
+# "now" is needed instead of datetime.now(). (Apify/LinkedIn date-window
+# comparisons intentionally stay on datetime.now(timezone.utc) — those are
+# compared against already-UTC API timestamps, so UTC is correct there.)
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST)
 
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
 APIFY_ACTOR_ID = os.getenv("APIFY_ACTOR_ID", "harvestapi~linkedin-post-search")

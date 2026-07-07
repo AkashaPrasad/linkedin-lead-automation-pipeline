@@ -1,6 +1,6 @@
 import asyncio
 import time
-from datetime import datetime
+from config import now_ist
 from logger import get_logger
 from stages.alerts import send_alert
 from stages.apify_scraper import run_apify
@@ -197,7 +197,7 @@ async def run_pipeline_async(
     sending = cfg.get("sending", {})
 
     pipeline_start = time.time()
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     dry_run = sending.get("dry_run_mode", False)
 
     # Clear any existing checkpoint — fresh run
@@ -388,7 +388,7 @@ async def resume_pipeline_async(emit):
     pipeline_start = time.time()
 
     log.info(f"Resuming from Stage {stage_completed} checkpoint")
-    await send_alert(f"🔄 Pipeline RESUMING from Stage {stage_completed} — {datetime.now().strftime('%H:%M:%S')}")
+    await send_alert(f"🔄 Pipeline RESUMING from Stage {stage_completed} — {now_ist().strftime('%H:%M:%S')}")
 
     # Replay completed stage events so frontend shows correct state
     for s in range(1, stage_completed + 1):

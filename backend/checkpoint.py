@@ -7,7 +7,7 @@ On the next run the user can choose to resume instead of starting fresh.
 """
 import json
 from pathlib import Path
-from datetime import datetime
+from config import now_ist
 from logger import get_logger
 
 log = get_logger("checkpoint")
@@ -18,7 +18,7 @@ CHECKPOINT_FILE = Path(__file__).parent.parent / "pipeline_checkpoint.json"
 def save(stage_completed: int, data: dict) -> None:
     state = {
         "stage_completed": stage_completed,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now_ist().isoformat(),
         **data,
     }
     try:

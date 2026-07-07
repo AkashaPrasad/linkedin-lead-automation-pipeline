@@ -10,6 +10,13 @@ RUN npm run build
 FROM python:3.10-slim
 WORKDIR /app
 
+# Defense-in-depth: the app already timestamps everything in IST explicitly
+# (see backend/config.py's now_ist()), independent of container timezone.
+# This just makes any OTHER incidental naive datetime.now() (e.g. inside a
+# third-party library) default correctly too, instead of the python:3.10-
+# slim base image's UTC default.
+ENV TZ=Asia/Kolkata
+
 # Install Python dependencies
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

@@ -1,7 +1,6 @@
 import asyncio
-from datetime import datetime
 from logger import get_logger
-from config import GOOGLE_SHEET_ID, service_account_path
+from config import GOOGLE_SHEET_ID, service_account_path, now_ist
 
 log = get_logger("sheets")
 
@@ -192,7 +191,7 @@ async def run_sheets_writer(
     skipped) for full audit visibility.
     daily_start_row is the 1-indexed row where the new real_posts begin in the daily tab.
     """
-    today = datetime.now().strftime("%d-%b-%Y")
+    today = now_ist().strftime("%d-%b-%Y")
 
     daily_tab = f"[DRY] {today}" if dry_run else today
     mode_msg = "[DRY RUN] " if dry_run else ""

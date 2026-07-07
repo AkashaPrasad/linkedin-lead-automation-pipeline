@@ -1,7 +1,6 @@
 import json
 import uuid
-from datetime import datetime
-from config import persistent_data_path, persistent_dir
+from config import persistent_data_path, persistent_dir, now_ist
 
 HISTORY_FILE = persistent_data_path("run_history.json")
 RUN_LOGS_DIR = persistent_dir("run_logs")
@@ -31,7 +30,10 @@ def _prune_orphaned_logs(current_runs: list[dict]) -> None:
 def append_run(data: dict, full_log: list[dict] | None = None) -> str:
     runs = _load()
     run_id = str(uuid.uuid4())[:8]
-    entry = {"id": run_id, "timestamp": datetime.now().isoformat(), **data}
+    # now_ist().isoformat() includes an explicit "+05:30" offset — this is
+    # what lets the frontend's `new Date(...)` parse it correctly regardless
+    # of the browser's own timezone, unlike a naive (offset-less) timestamp.
+    entry = {"id": run_id, "timestamp": now_ist().isoformat(), **data}
     runs.insert(0, entry)
     runs = runs[:100]
     HISTORY_FILE.write_text(json.dumps(runs, indent=2))
